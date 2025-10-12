@@ -10,6 +10,7 @@ SETUP_LOG="${REPO_DIR}/setup_desktop.log"
 declare -a SCRIPTS=(
   "setup_desktop.sh:Provisiona escritorio base (usuario, paquetes, XRDP)"
   "configure_xfce.sh:Personaliza XFCE y carga paneles"
+  "reboot:Reinicia el servidor tras aplicar los scripts"
 )
 
 log() {
@@ -235,7 +236,13 @@ main() {
           local total=${#SCRIPTS[@]}
           if (( idx >= 0 && idx < total )); then
             IFS=':' read -r script desc <<<"${SCRIPTS[${idx}]}"
-            run_script "${script}"
+            if [[ "${script}" == "reboot" ]]; then
+              log "Reiniciando el sistema..."
+              reboot
+              break
+            else
+              run_script "${script}"
+            fi
             if ask_continue; then
               continue
             else
