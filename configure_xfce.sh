@@ -84,10 +84,12 @@ configure_power() {
   xfconf_set_int /xfce4-power-manager/sleep-display-on-battery 0 xfce4-power-manager
   xfconf_set_bool /xfce4-power-manager/inactivity-on-ac false xfce4-power-manager
   xfconf_set_bool /xfce4-power-manager/inactivity-on-battery false xfce4-power-manager
-  run_xfconf --channel xfce4-screensaver --property /saver/enabled --create --type bool --set false
-  run_xfconf --channel xfce4-screensaver --property /saver/idle-activation-enabled --create --type bool --set false
-  run_xfconf --channel xfce4-screensaver --property /lock/lock-enabled --create --type bool --set false
-  run_xfconf --channel xfce4-screensaver --property /lock/lock-delay --create --type uint --set 0
+  xfconf_set_bool /saver/enabled false xfce4-screensaver
+  xfconf_set_bool /saver/idle-activation/enabled false xfce4-screensaver
+  xfconf_set_bool /lock/enabled false xfce4-screensaver
+  xfconf_set_bool /lock/saver-activation/enabled false xfce4-screensaver
+  xfconf_set_bool /lock/sleep-activation false xfce4-screensaver
+  run_xfconf --channel xfce4-screensaver --property /lock/saver-activation/delay --create --type uint --set 0
 }
 
 configure_keyboard() {
