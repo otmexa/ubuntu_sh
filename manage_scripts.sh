@@ -109,7 +109,7 @@ prompt_target_user() {
   suggested="$(get_last_setup_username || true)"
 
   if [[ -n "${suggested}" ]]; then
-    log "Usando usuario ${suggested} detectado en setup_desktop.log."
+    log "Usando usuario ${suggested} detectado en setup_desktop.log." >&2
     printf '%s\n' "${suggested}"
     return 0
   fi
