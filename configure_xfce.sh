@@ -70,6 +70,19 @@ xfconf_set_int() {
   run_xfconf --channel "${channel}" --property "${property}" --create --type int --set "${value}"
 }
 
+refresh_xfconf() {
+  local restarted=0
+  if pkill -u "${TARGET_USER}" -x xfconfd >/dev/null 2>&1; then
+    restarted=1
+  fi
+  if pkill -u "${TARGET_USER}" -x xfsettingsd >/dev/null 2>&1; then
+    restarted=1
+  fi
+  if [[ "${restarted}" -eq 1 ]]; then
+    log "Restarted XFCE configuration daemons for ${TARGET_USER}."
+  fi
+}
+
 configure_theme() {
   log "Setting XFCE theme to ${XFCE_THEME} for ${TARGET_USER}."
   xfconf_set_string /Net/ThemeName "${XFCE_THEME}" xsettings
@@ -103,6 +116,7 @@ configure_keyboard() {
   log "Configuring XFCE keyboard layout list for ${TARGET_USER}."
   # Force XFCE to ignore the system-wide layout so only the custom list applies.
   xfconf_set_bool /Default/UseSystemDefaults false keyboard-layout
+  run_xfconf --channel keyboard-layout --property /General/UseSystemDefaults --create --type bool --set false || true
   run_xfconf --channel keyboard-layout --property /Default/XkbLayout --create --type string --set "${KEYBOARD_LAYOUT}"
   if [[ -n "${KEYBOARD_VARIANT}" ]]; then
     run_xfconf --channel keyboard-layout --property /Default/XkbVariant --create --type string --set "${KEYBOARD_VARIANT}"
@@ -111,6 +125,8 @@ configure_keyboard() {
   fi
   run_xfconf --channel keyboard-layout --property /Default/LayoutList --create --force-array \
     --type string --set "${KEYBOARD_LAYOUT}"
+
+  refresh_xfconf
 }
 
 disable_release_upgrades() {
@@ -179,7 +195,7 @@ apply_panel_configuration() {
     log "Panel profile cached at ${profile_target} for ${TARGET_USER}."
 
     log "Importing panel profile using xfce4-panel-profiles."
-    if run_user_dbus xfce4-panel-profiles --load "${profile_target}"; then
+    if run_user_dbus xfce4-panel-profiles load "${profile_target}"; then
       log "Panel configuration imported via xfce4-panel-profiles for ${TARGET_USER}."
       return
     fi
