@@ -21,3 +21,16 @@ Coleccion de scripts para provisionar un escritorio Ubuntu con XFCE, XRDP y ajus
 3. **Revisar registros**  
    - `script_runs.log`: historial de scripts ejecutados y su resultado.
    - `setup_desktop.log`: credenciales en texto plano. Eliminalo cuando ya no lo necesites.
+
+## Resetear la copia local
+
+Si quieres limpiar la VPS y volver al estado original del repositorio:
+
+```bash
+cd ~
+sudo rm -rf ubuntu_sh
+git clone https://github.com/otmexa/ubuntu_sh.git
+cd ubuntu_sh
+```
+
+Esto descarta cambios locales (incluidos los logs) y deja el directorio igual que en GitHub. Ejecuta de nuevo `sudo bash manage_scripts.sh` para recrear los registros.
