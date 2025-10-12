@@ -15,6 +15,9 @@ XFCE_THEME="${XFCE_THEME:-Adwaita-dark}"
 KEYBOARD_LAYOUT="${KEYBOARD_LAYOUT:-latam}"
 KEYBOARD_MODEL="${KEYBOARD_MODEL:-pc105}"
 KEYBOARD_VARIANT="${KEYBOARD_VARIANT:-}"
+XFCE_PANEL_PROFILE_NAME="${XFCE_PANEL_PROFILE_NAME:-win}"
+TARGET_HOME=""
+TARGET_GROUP=""
 
 log() {
   printf '[INFO] %s\n' "$*"
@@ -31,8 +34,25 @@ if ! id "${TARGET_USER}" >/dev/null 2>&1; then
   exit 1
 fi
 
+TARGET_HOME="$(getent passwd "${TARGET_USER}" | cut -d: -f6)"
+if [[ -z "${TARGET_HOME}" || ! -d "${TARGET_HOME}" ]]; then
+  printf '[ERROR] Unable to resolve home directory for %s.\n' "${TARGET_USER}" >&2
+  exit 1
+fi
+
+TARGET_GROUP="$(id -gn "${TARGET_USER}")"
+
+run_user_dbus() {
+  local -a cmd=("$@")
+  if command -v dbus-run-session >/dev/null 2>&1; then
+    sudo -u "${TARGET_USER}" env HOME="${TARGET_HOME}" dbus-run-session -- "${cmd[@]}"
+  else
+    sudo -u "${TARGET_USER}" env HOME="${TARGET_HOME}" dbus-launch --exit-with-session "${cmd[@]}"
+  fi
+}
+
 run_xfconf() {
-  sudo -u "${TARGET_USER}" dbus-launch --exit-with-session xfconf-query "$@"
+  run_user_dbus xfconf-query "$@"
 }
 
 xfconf_set_string() {
@@ -79,7 +99,8 @@ configure_keyboard() {
   fi
 
   log "Configuring XFCE keyboard layout list for ${TARGET_USER}."
-  run_xfconf --channel keyboard-layout --property /Default/UseSystemDefaults --create --type bool --set false
+  # Force XFCE to ignore the system-wide layout so only the custom list applies.
+  xfconf_set_bool /Default/UseSystemDefaults false keyboard-layout
   run_xfconf --channel keyboard-layout --property /Default/XkbLayout --create --type string --set "${KEYBOARD_LAYOUT}"
   if [[ -n "${KEYBOARD_VARIANT}" ]]; then
     run_xfconf --channel keyboard-layout --property /Default/XkbVariant --create --type string --set "${KEYBOARD_VARIANT}"
@@ -108,7 +129,7 @@ EOF
 
   if command -v gsettings >/dev/null 2>&1; then
     log "Setting per-user release-upgrade-mode to never."
-    sudo -u "${TARGET_USER}" dbus-launch gsettings set com.ubuntu.update-notifier release-upgrade-mode never || true
+    run_user_dbus gsettings set com.ubuntu.update-notifier release-upgrade-mode never || true
   fi
 
   local autostart="/etc/xdg/autostart/update-notifier.desktop"
@@ -146,6 +167,23 @@ apply_panel_configuration() {
 
   log "Applying XFCE panel configuration from ${archive}."
 
+  if command -v xfce4-panel-profiles >/dev/null 2>&1; then
+    local profile_dir="${TARGET_HOME}/.local/share/xfce4-panel-profiles"
+    local profile_target="${profile_dir}/${XFCE_PANEL_PROFILE_NAME}.tar.bz2"
+    install -d -m 700 "${profile_dir}"
+    cp -f "${archive}" "${profile_target}"
+    chown -R "${TARGET_USER}:${TARGET_GROUP}" "${profile_dir}"
+    chmod 600 "${profile_target}"
+    log "Panel profile cached at ${profile_target} for ${TARGET_USER}."
+
+    log "Importing panel profile using xfce4-panel-profiles."
+    if run_user_dbus xfce4-panel-profiles --load "${profile_target}"; then
+      log "Panel configuration imported via xfce4-panel-profiles for ${TARGET_USER}."
+      return
+    fi
+    log "xfce4-panel-profiles import failed; falling back to manual method."
+  fi
+
   local temp_dir
   temp_dir="$(mktemp -d)"
 
@@ -162,18 +200,7 @@ apply_panel_configuration() {
     return
   fi
 
-  local target_home
-  target_home="$(eval echo "~${TARGET_USER}")"
-  if [[ -z "${target_home}" || ! -d "${target_home}" ]]; then
-    log "Unable to resolve home directory for ${TARGET_USER}; skipping panel import."
-    rm -rf "${temp_dir}"
-    return
-  fi
-
-  local target_group
-  target_group="$(id -gn "${TARGET_USER}")"
-
-  local panel_dir="${target_home}/.config/xfce4/panel"
+  local panel_dir="${TARGET_HOME}/.config/xfce4/panel"
   install -d -m 755 "${panel_dir}"
 
   # Copy launcher directories if present to preserve custom shortcuts.
@@ -190,10 +217,10 @@ apply_panel_configuration() {
     log "No launcher directories found in archive; continuing without launcher import."
   fi
 
-  chown -R "${TARGET_USER}:${target_group}" "${panel_dir}"
+  chown -R "${TARGET_USER}:${TARGET_GROUP}" "${panel_dir}"
 
   # Ensure the target user can read the config file during import.
-  chown "${TARGET_USER}:${target_group}" "${config_path}"
+  chown "${TARGET_USER}:${TARGET_GROUP}" "${config_path}"
   chmod 600 "${config_path}"
 
   if run_xfconf --channel xfce4-panel --from-file "${config_path}"; then

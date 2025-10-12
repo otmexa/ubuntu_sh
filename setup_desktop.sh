@@ -169,7 +169,7 @@ install_packages() {
   echo "lightdm shared/default-x-display-manager select lightdm" | debconf-set-selections
 
   log "Installing core packages (XFCE, lightdm, xrdp, Certbot)..."
-  apt-get install -y xubuntu-desktop lightdm xrdp certbot python3-certbot-nginx wget
+  apt-get install -y xubuntu-desktop lightdm xrdp certbot python3-certbot-nginx wget xfce4-panel-profiles
 
   log "Setting XFCE as the x-session-manager."
   update-alternatives --set x-session-manager /usr/bin/startxfce4
