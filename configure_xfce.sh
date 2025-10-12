@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+XFCE_PANEL_ARCHIVE="${XFCE_PANEL_ARCHIVE:-${SCRIPT_DIR}/winConfigTemp.bz2}"
+XFCE_PANEL_CONFIG_FILE="${XFCE_PANEL_CONFIG_FILE:-config.txt}"
+
 if [[ "$(id -u)" -ne 0 ]]; then
   printf '[ERROR] Run this script as root (use sudo).\n' >&2
   exit 1
@@ -133,12 +137,81 @@ disable_screen_lock() {
   fi
 }
 
+apply_panel_configuration() {
+  local archive="${XFCE_PANEL_ARCHIVE}"
+  if [[ ! -f "${archive}" ]]; then
+    log "Panel archive ${archive} not found; skipping panel import."
+    return
+  fi
+
+  log "Applying XFCE panel configuration from ${archive}."
+
+  local temp_dir
+  temp_dir="$(mktemp -d)"
+
+  if ! tar -xf "${archive}" -C "${temp_dir}"; then
+    log "Failed to extract panel archive; skipping panel import."
+    rm -rf "${temp_dir}"
+    return
+  fi
+
+  local config_path="${temp_dir}/${XFCE_PANEL_CONFIG_FILE}"
+  if [[ ! -f "${config_path}" ]]; then
+    log "Panel config file ${XFCE_PANEL_CONFIG_FILE} missing inside archive; skipping panel import."
+    rm -rf "${temp_dir}"
+    return
+  fi
+
+  local target_home
+  target_home="$(eval echo "~${TARGET_USER}")"
+  if [[ -z "${target_home}" || ! -d "${target_home}" ]]; then
+    log "Unable to resolve home directory for ${TARGET_USER}; skipping panel import."
+    rm -rf "${temp_dir}"
+    return
+  fi
+
+  local target_group
+  target_group="$(id -gn "${TARGET_USER}")"
+
+  local panel_dir="${target_home}/.config/xfce4/panel"
+  install -d -m 755 "${panel_dir}"
+
+  # Copy launcher directories if present to preserve custom shortcuts.
+  local copied_launchers=0
+  while IFS= read -r -d '' launcher_dir; do
+    local launcher_name
+    launcher_name="$(basename "${launcher_dir}")"
+    rm -rf "${panel_dir}/${launcher_name}"
+    cp -a "${launcher_dir}" "${panel_dir}/"
+    copied_launchers=1
+  done < <(find "${temp_dir}" -maxdepth 1 -type d -name 'launcher-*' -print0)
+
+  if [[ "${copied_launchers}" -eq 0 ]]; then
+    log "No launcher directories found in archive; continuing without launcher import."
+  fi
+
+  chown -R "${TARGET_USER}:${target_group}" "${panel_dir}"
+
+  # Ensure the target user can read the config file during import.
+  chown "${TARGET_USER}:${target_group}" "${config_path}"
+  chmod 600 "${config_path}"
+
+  if run_xfconf --channel xfce4-panel --from-file "${config_path}"; then
+    log "Panel configuration imported for ${TARGET_USER}."
+  else
+    log "Failed to import panel configuration for ${TARGET_USER}."
+  fi
+
+  rm -rf "${temp_dir}"
+}
+
 main() {
   disable_release_upgrades
   disable_screen_lock
   configure_theme
   configure_power
   configure_keyboard
+  apply_panel_configuration
   log "XFCE adjustments completed. Log out and back in to see theme changes."
 }
 

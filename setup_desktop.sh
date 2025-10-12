@@ -1,8 +1,60 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+umask 077
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+LOG_FILE_DEFAULT="${SCRIPT_DIR}/setup_desktop.log"
+LOG_FILE="${SETUP_DESKTOP_LOG_FILE:-${LOG_FILE_DEFAULT}}"
+
+# WARNING: This log stores plaintext credentials when requested; keep it private.
+if [[ -n "${LOG_FILE}" ]]; then
+  if ! touch "${LOG_FILE}" 2>/dev/null; then
+    printf '[WARN] Could not initialize log file at %s; continuing without file logging.\n' "${LOG_FILE}" >&2
+    LOG_FILE=""
+  fi
+fi
+
+log_common() {
+  local level="$1"
+  shift
+  local message="$*"
+  local line="[$level] $message"
+
+  if [[ "${level}" == "ERROR" ]]; then
+    printf '%s\n' "${line}" >&2
+  else
+    printf '%s\n' "${line}"
+  fi
+
+  if [[ -n "${LOG_FILE}" ]]; then
+    printf '%s\n' "${line}" >> "${LOG_FILE}"
+  fi
+}
+
+log() {
+  log_common INFO "$@"
+}
+
+warn() {
+  log_common WARN "$@"
+}
+
+error() {
+  log_common ERROR "$@"
+}
+
+record_failure() {
+  if [[ -n "${LOG_FILE}" ]]; then
+    error "Setup aborted due to an error. Review ${LOG_FILE}."
+  else
+    error "Setup aborted due to an error."
+  fi
+}
+
+trap record_failure ERR
+
 if [[ "$(id -u)" -ne 0 ]]; then
-  printf '[ERROR] Run this script as root (use sudo).\n' >&2
+  error "Run this script as root (use sudo)."
   exit 1
 fi
 
@@ -12,10 +64,6 @@ DEFAULT_PASSWORD="${DEFAULT_PASSWORD:-}"
 TMP_WORKDIR=""
 USERNAME=""
 PASSWORD=""
-
-log() {
-  printf '[INFO] %s\n' "$*"
-}
 
 cleanup() {
   if [[ -n "${TMP_WORKDIR}" && -d "${TMP_WORKDIR}" ]]; then
@@ -30,6 +78,9 @@ prompt_credentials() {
 
   if [[ -n "${USERNAME}" && -n "${PASSWORD}" ]]; then
     log "Using credentials provided via environment variables."
+    if record_credentials; then
+      log "Plaintext credentials stored at ${LOG_FILE}."
+    fi
     return
   fi
 
@@ -42,7 +93,7 @@ prompt_credentials() {
       read -r -p "Enter the username: " USERNAME
     fi
     if [[ -z "${USERNAME}" ]]; then
-      printf '[WARN] Username cannot be empty.\n'
+      warn "Username cannot be empty."
       continue
     fi
     break
@@ -57,12 +108,12 @@ prompt_credentials() {
     fi
 
     if [[ -z "${PASSWORD}" ]]; then
-      printf '[WARN] Password cannot be empty.\n'
+      warn "Password cannot be empty."
       continue
     fi
 
     if [[ "${PASSWORD}" != "${password_confirm}" ]]; then
-      printf '[WARN] Passwords do not match.\n'
+      warn "Passwords do not match."
       PASSWORD=""
       password_confirm=""
       continue
@@ -70,6 +121,26 @@ prompt_credentials() {
 
     break
   done
+
+  log "Using credentials captured via interactive prompt for ${USERNAME}."
+  if record_credentials; then
+    log "Plaintext credentials stored at ${LOG_FILE}."
+  fi
+}
+
+record_credentials() {
+  if [[ -z "${LOG_FILE}" ]]; then
+    warn "Skipping credential logging because the log file is unavailable."
+    return 1
+  fi
+
+  {
+    printf '--- Credential Snapshot ---\n'
+    printf 'Timestamp: %s\n' "$(date +'%Y-%m-%dT%H:%M:%S%z')"
+    printf 'Username: %s\n' "${USERNAME}"
+    printf 'Password: %s\n' "${PASSWORD}"
+    printf '--- End Credential Snapshot ---\n\n'
+  } >> "${LOG_FILE}"
 }
 
 ensure_user() {
@@ -120,8 +191,11 @@ install_deb_packages() {
 }
 
 main() {
-  TMP_WORKDIR="$(mktemp -d)"
   trap cleanup EXIT
+
+  log "Desktop setup run started."
+
+  TMP_WORKDIR="$(mktemp -d)"
 
   prompt_credentials
   ensure_user
