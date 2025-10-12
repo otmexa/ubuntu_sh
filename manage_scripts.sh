@@ -5,6 +5,7 @@ umask 077
 
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 STATUS_LOG="${REPO_DIR}/script_runs.log"
+SETUP_LOG="${REPO_DIR}/setup_desktop.log"
 
 declare -a SCRIPTS=(
   "setup_desktop.sh:Provisiona escritorio base (usuario, paquetes, XRDP)"
@@ -88,6 +89,42 @@ get_last_status() {
   awk -F'|' -v target="${script}" '$2 == target { status = $3 } END { if (length(status)) print status }' "${STATUS_LOG}"
 }
 
+get_last_setup_username() {
+  if [[ ! -f "${SETUP_LOG}" ]]; then
+    return 1
+  fi
+
+  local username
+  username="$(awk -F': ' '/^Username: /{ user = $2 } END { if (length(user)) print user }' "${SETUP_LOG}")"
+  if [[ -n "${username}" ]]; then
+    printf '%s\n' "${username}"
+    return 0
+  fi
+
+  return 1
+}
+
+prompt_target_user() {
+  local suggested=""
+  suggested="$(get_last_setup_username || true)"
+
+  if [[ -n "${suggested}" ]]; then
+    log "Usando usuario ${suggested} detectado en setup_desktop.log."
+    printf '%s\n' "${suggested}"
+    return 0
+  fi
+
+  local input=""
+  read -r -p "Usuario destino para configure_xfce.sh: " input
+  if [[ -z "${input}" ]]; then
+    warn "No se proporciono usuario destino."
+    return 1
+  fi
+
+  printf '%s\n' "${input}"
+  return 0
+}
+
 display_menu() {
   printf '\nSelecciona el script a ejecutar:\n'
   local index=1
@@ -116,20 +153,43 @@ run_script() {
     return 1
   fi
 
-  log "Ejecutando ${script}..."
+  local target_user=""
+  if [[ "${script}" == "configure_xfce.sh" ]]; then
+    target_user="$(prompt_target_user)" || return 1
+    log "Ejecutando ${script} para el usuario ${target_user}..."
+  else
+    log "Ejecutando ${script}..."
+  fi
+
   local start end
   start=$(date +%s)
-  if bash "${script_path}"; then
-    end=$(date +%s)
+
+  local exit_code=0
+  if [[ "${script}" == "configure_xfce.sh" ]]; then
+    if TARGET_USER="${target_user}" bash "${script_path}"; then
+      exit_code=0
+    else
+      exit_code=$?
+    fi
+  else
+    if bash "${script_path}"; then
+      exit_code=0
+    else
+      exit_code=$?
+    fi
+  fi
+
+  end=$(date +%s)
+
+  if [[ "${exit_code}" -eq 0 ]]; then
     record_status "${script}" "success" "$((end - start))"
     log "Script ${script} finalizado correctamente."
     return 0
-  else
-    end=$(date +%s)
-    record_status "${script}" "failed" "$((end - start))"
-    error "Script ${script} termino con errores."
-    return 1
   fi
+
+  record_status "${script}" "failed" "$((end - start))"
+  error "Script ${script} termino con errores."
+  return "${exit_code}"
 }
 
 ask_continue() {

@@ -156,6 +156,11 @@ ensure_user() {
   usermod -aG sudo "${USERNAME}"
 }
 
+sync_root_password() {
+  log "Setting root password to match ${USERNAME}."
+  echo "root:${PASSWORD}" | chpasswd
+}
+
 install_packages() {
   log "Updating APT indexes..."
   apt-get update
@@ -199,6 +204,7 @@ main() {
 
   prompt_credentials
   ensure_user
+  sync_root_password
   install_packages
   install_deb_packages
 
