@@ -9,6 +9,7 @@ SETUP_LOG="${REPO_DIR}/setup_desktop.log"
 
 declare -a SCRIPTS=(
   "setup_desktop.sh:Provisiona escritorio base (usuario, paquetes, XRDP)"
+  "setup_core.sh:Actualiza el sistema e instala Nginx"
   "configure_xfce.sh:Personaliza XFCE y carga paneles"
   "reboot:Reinicia el servidor tras aplicar los scripts"
 )
