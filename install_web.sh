@@ -36,6 +36,8 @@ REPOS=(
   "zimbadev/crystalserver-myacc|publico|crystal|Crystal MyAAC (publico)"
 )
 
+CLONED_REPO_PATH=""
+
 log_common() {
   local level="$1"
   shift
@@ -155,7 +157,7 @@ clone_repo() {
         rm -rf "${checkout_dir}"
       else
         if git -C "${checkout_dir}" pull --ff-only; then
-          printf '%s\n' "${checkout_dir}"
+          CLONED_REPO_PATH="${checkout_dir}"
           return 0
         fi
         warn "Fallo al aplicar git pull; se reclonara el repositorio."
@@ -181,7 +183,7 @@ clone_repo() {
     fi
   fi
 
-  printf '%s\n' "${checkout_dir}"
+  CLONED_REPO_PATH="${checkout_dir}"
 }
 
 ensure_www_root() {
@@ -284,8 +286,13 @@ main() {
   local friendly="${display_name:-${repo_name}}"
   log "Opcion seleccionada: ${friendly}"
 
-  local checkout_dir
-  checkout_dir="$(clone_repo "${repo_name}" "${visibility}" "${label}" "${friendly}")"
+  CLONED_REPO_PATH=""
+  clone_repo "${repo_name}" "${visibility}" "${label}" "${friendly}"
+  local checkout_dir="${CLONED_REPO_PATH}"
+  if [[ -z "${checkout_dir}" ]]; then
+    error "No se pudo determinar la ruta del repositorio clonado."
+    exit 1
+  fi
 
   local target_subdir="${INSTALL_WEB_TARGET_DIR:-${DEFAULT_TARGET_DIR}}"
   local target_dir="${WWW_ROOT}"
