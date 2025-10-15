@@ -31,7 +31,15 @@ Coleccion de scripts para provisionar un escritorio Ubuntu con XFCE, XRDP y ajus
    - Garantizar que UFW quede instalado, habilitado y con los puertos requeridos abiertos (`22`, `80`, `443`, `3389`, `3800`, `7171`, `7172`, `8245`). Puedes añadir otros via `CORE_FIREWALL_EXTRA_PORTS` (lista separada por comas).
    - Registrar el avance en `setup_core.log`, marcando cada paso completado o fallido para diagnosticar problemas.
 
-4. **Revisar registros**  
+4. **Instalar la web (MyAAC)**  
+   Ejecuta `install_web.sh` (opcion 4) para:
+   - Elegir entre la version publica (`zimbadev/crystalserver-myacc`) o la privada (`otmexa/myaac_noxusot`). Si seleccionas la privada y no hay credenciales, el script lanzara `gh auth login` para que completes el flujo con tu navegador.
+   - Clonar la web en `~/ubuntu_sh/web_sources/<repo>` y sincronizarla hacia `/var/www/html/` (puedes cambiar el destino exportando `INSTALL_WEB_TARGET_DIR=<subcarpeta>`). Usa `INSTALL_WEB_CLEAN_TARGET=1` si quieres que se eliminen archivos previos del destino.
+   - Ajustar permisos: la carpeta queda bajo `www-data:www-data`, se aplican ACL (si hay `setfacl`) y se abren los directorios que requieren escritura (`outfits`, `system`, `images`, `plugins`, `tools`, `cache`).
+   - Agregar automaticamente al usuario que lanzo el script (`benny`, etc.) al grupo `www-data` para que GitHub Desktop o cualquier editor grafico pueda modificar los archivos. Deberas cerrar y reabrir sesion para que surta efecto.
+   - Registrar el proceso en `install_web.log`.
+
+5. **Revisar registros**  
    - `script_runs.log`: historial de scripts ejecutados y su resultado.
    - `setup_desktop.log`: credenciales en texto plano. Eliminalo cuando ya no lo necesites.
    - `setup_core.state`: estado de cada paso del core para reanudar sin repetir etapas. Bórralo (o ejecuta con `SETUP_CORE_RESET_STATE=1`) si quieres forzar que todos los pasos vuelvan a correr.

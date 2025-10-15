@@ -22,6 +22,7 @@ declare -a SCRIPTS=(
   "setup_desktop.sh:Provisiona escritorio base (usuario, paquetes, XRDP)"
   "configure_xfce.sh:Personaliza XFCE y carga paneles"
   "setup_core.sh:Actualiza el sistema e instala Nginx"
+  "install_web.sh:Despliega MyAAC en Nginx"
   "reboot:Reinicia el servidor tras aplicar los scripts"
 )
 
@@ -183,6 +184,10 @@ run_script() {
     setup_core.sh)
       export SETUP_CORE_LOG_FILE="${REPO_DIR}/setup_core.log"
       log_hint="${SETUP_CORE_LOG_FILE}"
+      ;;
+    install_web.sh)
+      export INSTALL_WEB_LOG_FILE="${REPO_DIR}/install_web.log"
+      log_hint="${INSTALL_WEB_LOG_FILE}"
       ;;
   esac
 
