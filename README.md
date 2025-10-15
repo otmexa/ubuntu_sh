@@ -28,6 +28,7 @@ Coleccion de scripts para provisionar un escritorio Ubuntu con XFCE, XRDP y ajus
    - Limpiar versiones previas de PHP, agregar el PPA de Ondrej e instalar PHP 8.2 con FPM y modulos comunes, asegurando que el servicio quede activo. Tambien purga Apache si estuviera presente.
    - Solicitar el alias publico para phpMyAdmin (personalizable via `CORE_PHPMYADMIN_ALIAS`), reiniciar `/var/www/html`, descargar phpMyAdmin 5.2.1, generar `blowfish_secret` y dejarlo listo en `/var/www/html/<alias>` con los permisos correctos. Puedes renombrar la carpeta luego para ofuscar la ruta.
    - Preguntar por el dominio (puede quedar vacio para usar solo IP) y escribir `/etc/nginx/conf.d/default.conf` con la configuracion propuesta, validando y recargando Nginx automaticamente.
+   - Garantizar que UFW quede instalado, habilitado y con los puertos requeridos abiertos (`22`, `80`, `443`, `3389`, `3800`, `7171`, `7172`, `8245`). Puedes añadir otros via `CORE_FIREWALL_EXTRA_PORTS` (lista separada por comas).
    - Registrar el avance en `setup_core.log`, marcando cada paso completado o fallido para diagnosticar problemas.
 
 4. **Revisar registros**  

@@ -16,6 +16,7 @@ STEP_ORDER=(
   "mariadb_setup"
   "php_setup"
   "phpmyadmin_setup"
+  "firewall_setup"
   "summary"
 )
 
@@ -33,6 +34,9 @@ declare -A STEP_STATUS=()
 STATE_DATA_MARIADB_USER=""
 STATE_DATA_PHPMYADMIN_ALIAS=""
 STATE_DATA_NGINX_SERVER_NAME=""
+
+FIREWALL_DEFAULT_RULES=("22/tcp" "80/tcp" "443/tcp" "3389/tcp" "3800/tcp" "7171/tcp" "7172/tcp" "8245/tcp")
+declare -a FIREWALL_RULES=()
 
 LOG_OWNER="${SETUP_CORE_LOG_OWNER:-${SUDO_USER:-root}}"
 LOG_GROUP="${SETUP_CORE_LOG_GROUP:-}"
@@ -82,6 +86,33 @@ warn() {
 
 error() {
   log_common ERROR "$@"
+}
+
+build_firewall_rules() {
+  local -A seen_rules=()
+  FIREWALL_RULES=()
+
+  for rule in "${FIREWALL_DEFAULT_RULES[@]}"; do
+    local normalized="${rule,,}"
+    if [[ -z "${seen_rules[${normalized}]:-}" ]]; then
+      FIREWALL_RULES+=("${rule}")
+      seen_rules["${normalized}"]=1
+    fi
+  done
+
+  if [[ -n "${CORE_FIREWALL_EXTRA_PORTS:-}" ]]; then
+    local raw="${CORE_FIREWALL_EXTRA_PORTS}"
+    raw="${raw//,/ }"
+    for token in ${raw}; do
+      local cleaned="${token//[[:space:]]/}"
+      [[ -z "${cleaned}" ]] && continue
+      local normalized="${cleaned,,}"
+      if [[ -z "${seen_rules[${normalized}]:-}" ]]; then
+        FIREWALL_RULES+=("${cleaned}")
+        seen_rules["${normalized}"]=1
+      fi
+    done
+  fi
 }
 
 save_state() {
@@ -795,6 +826,62 @@ remove_apache() {
   fi
 }
 
+ufw_rule_exists() {
+  local rule="$1"
+  set +e
+  LANG=C ufw status | awk -v rule="${rule}" '$1 == rule && $2 == "ALLOW" { found=1 } END { exit(found ? 0 : 1) }'
+  local status=$?
+  set -e
+  return "${status}"
+}
+
+ensure_ufw_rule() {
+  local rule="$1"
+  if ufw_rule_exists "${rule}"; then
+    log "Regla UFW ${rule} ya existe; se omite."
+    return
+  fi
+  log "Agregando regla UFW para ${rule}..."
+  ufw allow "${rule}"
+}
+
+install_ufw() {
+  log "Instalando y actualizando UFW..."
+  apt-get install -y ufw
+}
+
+enable_ufw() {
+  set +e
+  LANG=C ufw status | grep -qi '^status: active'
+  local active=$?
+  set -e
+  if [[ "${active}" -eq 0 ]]; then
+    log "UFW ya se encuentra activo."
+    return
+  fi
+  log "Habilitando UFW con reglas persistentes..."
+  ufw --force enable
+}
+
+configure_firewall_rules() {
+  if [[ ${#FIREWALL_RULES[@]} -eq 0 ]]; then
+    log "No se definieron reglas UFW a configurar."
+    return
+  fi
+  log "Aplicando reglas UFW requeridas..."
+  local rule
+  for rule in "${FIREWALL_RULES[@]}"; do
+    ensure_ufw_rule "${rule}"
+  done
+  log "Reglas UFW aplicadas."
+}
+
+step_firewall_setup() {
+  install_ufw
+  enable_ufw
+  configure_firewall_rules
+}
+
 step_system_prepare() {
   update_system
   install_helper_tools
@@ -850,6 +937,7 @@ Setup core completado.
   - Privilegios globales asignados a ${MARIADB_APP_USER}
   - PHP 8.2 instalado desde el PPA de Ondrej y listo con php-fpm
   - phpMyAdmin desplegado en /var/www/html/${PHPMYADMIN_ALIAS}
+  - Firewall UFW activo con reglas: ${FIREWALL_RULES[*]}
   - Registro del proceso: ${LOG_FILE:-no disponible}
 ========================================
 
@@ -893,6 +981,7 @@ collect_initial_inputs() {
 }
 
 main() {
+  build_firewall_rules
   initialize_state_handling
   collect_initial_inputs
   run_step "system_prepare" "Preparar sistema base" step_system_prepare
@@ -900,6 +989,7 @@ main() {
   run_step "mariadb_setup" "Instalar y configurar MariaDB" step_mariadb_setup
   run_step "php_setup" "Instalar y configurar PHP 8.2" step_php_setup
   run_step "phpmyadmin_setup" "Desplegar phpMyAdmin" step_phpmyadmin_setup
+  run_step "firewall_setup" "Configurar firewall (UFW)" step_firewall_setup
   run_step "summary" "Mostrar resumen final" step_summary
 }
 
