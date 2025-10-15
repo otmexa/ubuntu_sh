@@ -62,6 +62,17 @@ ensure_gh_cli() {
   exit 1
 }
 
+open_device_portal() {
+  local url="https://github.com/login/device"
+  if [[ -n "${SUDO_USER:-}" && "${SUDO_USER}" != "root" && -n "${DISPLAY:-}" && -x "$(command -v sudo)" && -x "$(command -v xdg-open)" ]]; then
+    if sudo -u "${SUDO_USER}" DISPLAY="${DISPLAY}" DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-}" xdg-open "${url}" >/dev/null 2>&1; then
+      log "Se abrio ${url} en la sesion de ${SUDO_USER}. Continua con el codigo que mostrara gh."
+      return
+    fi
+  fi
+  warn "Abre manualmente ${url} antes de ingresar el codigo mostrado por gh."
+}
+
 log_common() {
   local level="$1"
   shift
@@ -170,6 +181,7 @@ check_gh_auth() {
   fi
 
   log "GitHub CLI no autenticado. Iniciando flujo interactivo..."
+  open_device_portal
   if gh auth login --hostname github.com --scopes "repo"; then
     log "Autenticacion completada correctamente."
     return 0

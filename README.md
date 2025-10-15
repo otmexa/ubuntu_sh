@@ -33,7 +33,7 @@ Coleccion de scripts para provisionar un escritorio Ubuntu con XFCE, XRDP y ajus
 
 4. **Instalar la web (MyAAC)**  
    Ejecuta `install_web.sh` (opcion 4) para:
-   - Elegir entre la version publica (`zimbadev/crystalserver-myacc`) o la privada (`otmexa/myaac_noxusot`). Si seleccionas la privada y no hay credenciales, el script verificara/instalara `gh` automaticamente y lanzara `gh auth login` para que completes el flujo. Si la autenticacion falla, ejecuta manualmente `gh auth login --hostname github.com --scopes repo` y vuelve a correr la opcion.
+   - Elegir entre la version publica (`zimbadev/crystalserver-myacc`) o la privada (`otmexa/myaac_noxusot`). Si seleccionas la privada, el script verificara/instalara `gh`, intentara abrir `https://github.com/login/device` en tu sesion y lanzara `gh auth login`. Si aun asi falla la autenticacion, ejecuta manualmente `gh auth login --hostname github.com --scopes repo` y vuelve a correr la opcion.
    - Clonar la web en `~/.cache/ubuntu_sh/web_sources/<repo>` (cambia la ruta con `INSTALL_WEB_SOURCE_DIR`) y sincronizarla hacia `/var/www/html/`. Usa `INSTALL_WEB_CLEAN_TARGET=1` si quieres que se eliminen archivos previos del destino.
    - Ajustar permisos: por defecto deja la carpeta bajo `www-data:www-data`, aplica ACL (si hay `setfacl`) y abre los directorios que requieren escritura (`outfits`, `system`, `images`, `plugins`, `tools`, `cache`). Puedes omitir estos ajustes con `INSTALL_WEB_SKIP_DEPLOY_PERMS=1`.
    - Agregar automaticamente al usuario que lanzo el script (`benny`, etc.) al grupo `www-data` (omite este paso con `INSTALL_WEB_SKIP_GROUP_ASSIGN=1`). Deberas cerrar y reabrir sesion para que surta efecto.
