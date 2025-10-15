@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOG_FILE_DEFAULT="${SCRIPT_DIR}/setup_core.log"
@@ -56,6 +56,16 @@ warn() {
 error() {
   log_common ERROR "$@"
 }
+
+on_unexpected_error() {
+  local exit_code=$?
+  local line="${BASH_LINENO[0]:-?}"
+  local cmd="${BASH_COMMAND:-?}"
+  error "Fallo inesperado (codigo ${exit_code}) en linea ${line}: ${cmd}"
+  exit "${exit_code}"
+}
+
+trap 'on_unexpected_error' ERR
 
 run_step() {
   local description="$1"

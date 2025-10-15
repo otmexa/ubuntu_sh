@@ -160,6 +160,7 @@ display_menu() {
 run_script() {
   local script="$1"
   local script_path="${REPO_DIR}/${script}"
+  local log_hint=""
 
   if [[ ! -f "${script_path}" ]]; then
     error "El script ${script} no se encontro."
@@ -173,6 +174,17 @@ run_script() {
   else
     log "Ejecutando ${script}..."
   fi
+
+  case "${script}" in
+    setup_desktop.sh)
+      export SETUP_DESKTOP_LOG_FILE="${REPO_DIR}/setup_desktop.log"
+      log_hint="${SETUP_DESKTOP_LOG_FILE}"
+      ;;
+    setup_core.sh)
+      export SETUP_CORE_LOG_FILE="${REPO_DIR}/setup_core.log"
+      log_hint="${SETUP_CORE_LOG_FILE}"
+      ;;
+  esac
 
   local start end
   start=$(date +%s)
@@ -202,6 +214,16 @@ run_script() {
 
   record_status "${script}" "failed" "$((end - start))"
   error "Script ${script} termino con errores."
+  if [[ -n "${log_hint}" ]]; then
+    if [[ -r "${log_hint}" ]]; then
+      error "Ultimas 20 lineas de ${log_hint}:"
+      if ! tail -n 20 "${log_hint}" 2>/dev/null | sed 's/^/[LOG] /'; then
+        warn "No se pudo leer ${log_hint} pese a existir."
+      fi
+    else
+      warn "No se encontro log para ${script} en ${log_hint}."
+    fi
+  fi
   return "${exit_code}"
 }
 
