@@ -183,6 +183,7 @@ install_packages() {
 install_deb_packages() {
   local github_deb="${TMP_WORKDIR}/github-desktop.deb"
   local chrome_deb="${TMP_WORKDIR}/google-chrome.deb"
+  local vscode_deb="${TMP_WORKDIR}/vscode.deb"
 
   log "Downloading GitHub Desktop..."
   wget -qO "${github_deb}" "https://github.com/shiftkey/desktop/releases/download/release-3.4.3-linux1/GitHubDesktop-linux-amd64-3.4.3-linux1.deb"
@@ -193,6 +194,11 @@ install_deb_packages() {
   wget -qO "${chrome_deb}" "https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb"
   log "Installing Google Chrome..."
   apt-get install -y "${chrome_deb}"
+
+  log "Downloading Visual Studio Code..."
+  wget -qO "${vscode_deb}" "https://code.visualstudio.com/sha/download?build=stable&os=linux-deb-x64"
+  log "Installing Visual Studio Code..."
+  apt-get install -y "${vscode_deb}"
 }
 
 main() {
