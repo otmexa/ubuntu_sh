@@ -39,20 +39,6 @@ error() {
   printf '[ERROR] %s\n' "$*" >&2
 }
 
-make_scripts_executable() {
-  local adjusted=0
-  while IFS= read -r -d '' file; do
-    chmod +x "${file}"
-    adjusted=1
-  done < <(find "${REPO_DIR}" -maxdepth 1 -type f -name '*.sh' ! -perm -111 -print0)
-
-  if [[ "${adjusted}" -eq 1 ]]; then
-    log "Se asignaron permisos de ejecucion a los scripts del proyecto."
-  else
-    log "Los scripts ya contaban con permisos de ejecucion."
-  fi
-}
-
 record_status() {
   local script="$1"
   local status="$2"
@@ -226,8 +212,6 @@ main() {
   if ! chown "${LOG_OWNER}:${LOG_GROUP}" "${STATUS_LOG}" 2>/dev/null; then
     warn "No se pudo asignar propietario ${LOG_OWNER}:${LOG_GROUP} a ${STATUS_LOG}; se mantienen los permisos actuales."
   fi
-
-  make_scripts_executable
 
   while true; do
     display_menu
