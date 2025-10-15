@@ -37,6 +37,7 @@ REPOS=(
 )
 
 CLONED_REPO_PATH=""
+SELECTED_REPO=""
 
 log_common() {
   local level="$1"
@@ -85,7 +86,7 @@ ensure_root() {
 }
 
 prompt_repo_choice() {
-  log "Selecciona la web a instalar:"
+  printf '\nSelecciona la web a instalar:\n'
   local index=1
   local choice=""
   for entry in "${REPOS[@]}"; do
@@ -109,7 +110,7 @@ prompt_repo_choice() {
         if [[ "${choice}" =~ ^[0-9]+$ ]]; then
           local idx=$((choice - 1))
           if (( idx >= 0 && idx < ${#REPOS[@]} )); then
-            printf '%s\n' "${REPOS[${idx}]}"
+            SELECTED_REPO="${REPOS[${idx}]}"
             return 0
           fi
         fi
@@ -287,9 +288,14 @@ main() {
   ensure_www_root
   ensure_user_in_www_data
 
-  local selection
-  selection="$(prompt_repo_choice)"
-  IFS='|' read -r repo_name visibility label display_name <<<"${selection}"
+  SELECTED_REPO=""
+  prompt_repo_choice
+  if [[ -z "${SELECTED_REPO}" ]]; then
+    error "No se selecciono ninguna opcion valida."
+    exit 1
+  fi
+
+  IFS='|' read -r repo_name visibility label display_name <<<"${SELECTED_REPO}"
   local friendly="${display_name:-${repo_name}}"
   log "Opcion seleccionada: ${friendly}"
 
