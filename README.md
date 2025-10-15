@@ -33,6 +33,7 @@ Coleccion de scripts para provisionar un escritorio Ubuntu con XFCE, XRDP y ajus
 4. **Revisar registros**  
    - `script_runs.log`: historial de scripts ejecutados y su resultado.
    - `setup_desktop.log`: credenciales en texto plano. Eliminalo cuando ya no lo necesites.
+   - `setup_core.state`: estado de cada paso del core para reanudar sin repetir etapas. Bórralo (o ejecuta con `SETUP_CORE_RESET_STATE=1`) si quieres forzar que todos los pasos vuelvan a correr.
 
 ## Resetear la copia local
 

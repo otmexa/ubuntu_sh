@@ -4,8 +4,35 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOG_FILE_DEFAULT="${SCRIPT_DIR}/setup_core.log"
 LOG_FILE="${SETUP_CORE_LOG_FILE:-${LOG_FILE_DEFAULT}}"
-TOTAL_STEPS=6
+
+STATE_FILE_DEFAULT="${SCRIPT_DIR}/setup_core.state"
+STATE_FILE="${SETUP_CORE_STATE_FILE:-${STATE_FILE_DEFAULT}}"
+STATE_RESET="${SETUP_CORE_RESET_STATE:-0}"
+STATE_ENABLED=0
+
+STEP_ORDER=(
+  "system_prepare"
+  "nginx_setup"
+  "mariadb_setup"
+  "php_setup"
+  "phpmyadmin_setup"
+  "summary"
+)
+
+declare -A STEP_INDEX=()
+for idx in "${!STEP_ORDER[@]}"; do
+  STEP_INDEX["${STEP_ORDER[$idx]}"]=$((idx + 1))
+done
+
+TOTAL_STEPS=${#STEP_ORDER[@]}
 CURRENT_STEP=0
+INPUTS_COLLECTED=0
+
+declare -A STEP_STATUS=()
+
+STATE_DATA_MARIADB_USER=""
+STATE_DATA_PHPMYADMIN_ALIAS=""
+STATE_DATA_NGINX_SERVER_NAME=""
 
 LOG_OWNER="${SETUP_CORE_LOG_OWNER:-${SUDO_USER:-root}}"
 LOG_GROUP="${SETUP_CORE_LOG_GROUP:-}"
@@ -57,6 +84,122 @@ error() {
   log_common ERROR "$@"
 }
 
+save_state() {
+  if [[ "${STATE_ENABLED}" -ne 1 || -z "${STATE_FILE}" ]]; then
+    return
+  fi
+
+  local mariadb_user="${MARIADB_APP_USER:-${STATE_DATA_MARIADB_USER:-}}"
+  STATE_DATA_MARIADB_USER="${mariadb_user}"
+  local phpmyadmin_alias="${PHPMYADMIN_ALIAS:-${STATE_DATA_PHPMYADMIN_ALIAS:-}}"
+  STATE_DATA_PHPMYADMIN_ALIAS="${phpmyadmin_alias}"
+  local nginx_name="${NGINX_SERVER_NAME:-${STATE_DATA_NGINX_SERVER_NAME:-}}"
+  STATE_DATA_NGINX_SERVER_NAME="${nginx_name}"
+
+  local tmp_file="${STATE_FILE}.tmp"
+  {
+    printf '# setup_core state (no editar manualmente)\n'
+    printf 'version=1\n'
+    for step in "${STEP_ORDER[@]}"; do
+      printf 'step:%s=%s\n' "${step}" "${STEP_STATUS[${step}]}"
+    done
+    printf 'data:mariadb_user=%s\n' "${STATE_DATA_MARIADB_USER}"
+    printf 'data:phpmyadmin_alias=%s\n' "${STATE_DATA_PHPMYADMIN_ALIAS}"
+    printf 'data:nginx_server_name=%s\n' "${STATE_DATA_NGINX_SERVER_NAME}"
+  } > "${tmp_file}"
+
+  mv "${tmp_file}" "${STATE_FILE}"
+  chmod 640 "${STATE_FILE}"
+  chown "${LOG_OWNER}:${LOG_GROUP}" "${STATE_FILE}" 2>/dev/null || true
+}
+
+load_state() {
+  for step in "${STEP_ORDER[@]}"; do
+    STEP_STATUS["${step}"]="pending"
+  done
+
+  STATE_DATA_MARIADB_USER=""
+  STATE_DATA_PHPMYADMIN_ALIAS=""
+  STATE_DATA_NGINX_SERVER_NAME=""
+
+  if [[ "${STATE_ENABLED}" -ne 1 || ! -s "${STATE_FILE}" ]]; then
+    return
+  fi
+
+  local resumed=0
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    [[ -z "${line}" || "${line:0:1}" == "#" ]] && continue
+    local key="${line%%=*}"
+    local value="${line#*=}"
+    case "${key}" in
+      step:*)
+        local step="${key#step:}"
+        if [[ -n "${STEP_INDEX[${step}]:-}" ]]; then
+          case "${value}" in
+            completed)
+              STEP_STATUS["${step}"]="completed"
+              resumed=1
+              ;;
+            pending|failed)
+              STEP_STATUS["${step}"]="${value}"
+              ;;
+            in_progress)
+              STEP_STATUS["${step}"]="failed"
+              ;;
+            *)
+              STEP_STATUS["${step}"]="pending"
+              ;;
+          esac
+        fi
+        ;;
+      data:mariadb_user)
+        STATE_DATA_MARIADB_USER="${value}"
+        ;;
+      data:phpmyadmin_alias)
+        STATE_DATA_PHPMYADMIN_ALIAS="${value}"
+        ;;
+      data:nginx_server_name)
+        STATE_DATA_NGINX_SERVER_NAME="${value}"
+        ;;
+    esac
+  done < "${STATE_FILE}"
+
+  if [[ "${resumed}" -eq 1 ]]; then
+    log "Estado previo detectado: se omitiran pasos marcados como completados."
+  fi
+}
+
+set_step_status() {
+  local step="$1"
+  local status="$2"
+  STEP_STATUS["${step}"]="${status}"
+  save_state
+}
+
+initialize_state_handling() {
+  if [[ -z "${STATE_FILE}" ]]; then
+    return
+  fi
+
+  if [[ "${STATE_RESET}" -eq 1 && -f "${STATE_FILE}" ]]; then
+    rm -f "${STATE_FILE}" || warn "No se pudo eliminar el archivo de estado previo ${STATE_FILE}."
+  fi
+
+  if ! touch "${STATE_FILE}" 2>/dev/null; then
+    warn "No se pudo inicializar el archivo de estado en ${STATE_FILE}; reanudacion deshabilitada."
+    STATE_FILE=""
+    STATE_ENABLED=0
+    return
+  fi
+
+  chmod 640 "${STATE_FILE}"
+  chown "${LOG_OWNER}:${LOG_GROUP}" "${STATE_FILE}" 2>/dev/null || true
+  STATE_ENABLED=1
+
+  load_state
+  save_state
+}
+
 on_unexpected_error() {
   local exit_code=$?
   local line="${BASH_LINENO[0]:-?}"
@@ -68,18 +211,33 @@ on_unexpected_error() {
 trap 'on_unexpected_error' ERR
 
 run_step() {
+  local step_id="$1"
+  shift || true
   local description="$1"
   shift || true
   local fn="$1"
   shift || true
 
-  if [[ -z "${fn}" ]]; then
-    error "No se proporciono funcion para ejecutar en el paso: ${description}."
+  if [[ -z "${step_id}" || -z "${fn}" ]]; then
+    error "Parametros invalidos al ejecutar un paso."
     exit 1
   fi
 
-  ((++CURRENT_STEP))
+  local step_number="${STEP_INDEX[${step_id}]:-0}"
+  if [[ "${step_number}" -eq 0 ]]; then
+    error "Paso desconocido: ${step_id}."
+    exit 1
+  fi
+
+  CURRENT_STEP="${step_number}"
+
+  if [[ "${STEP_STATUS[${step_id}]}" == "completed" ]]; then
+    log "----- Paso ${CURRENT_STEP}/${TOTAL_STEPS}: ${description} (omitido - ya completado previamente)"
+    return 0
+  fi
+
   log "----- Paso ${CURRENT_STEP}/${TOTAL_STEPS}: ${description} (iniciando)"
+  set_step_status "${step_id}" "in_progress"
 
   set +e
   "${fn}" "$@"
@@ -87,10 +245,12 @@ run_step() {
   set -e
 
   if [[ "${status}" -eq 0 ]]; then
+    set_step_status "${step_id}" "completed"
     log "----- Paso ${CURRENT_STEP}/${TOTAL_STEPS}: ${description} (completado)"
     return 0
   fi
 
+  set_step_status "${step_id}" "failed"
   error "----- Paso ${CURRENT_STEP}/${TOTAL_STEPS}: ${description} (fallo)"
   exit 1
 }
@@ -198,7 +358,7 @@ enable_and_check_mariadb() {
 }
 
 prompt_mariadb_credentials() {
-  local default_user="${CORE_MARIADB_USER:-app_user}"
+  local default_user="${CORE_MARIADB_USER:-${STATE_DATA_MARIADB_USER:-app_user}}"
   local user_input=""
   local password_input=""
   local password_confirm=""
@@ -239,6 +399,16 @@ prompt_mariadb_credentials() {
   log "La password capturada se aplicara tanto al usuario ${MARIADB_APP_USER} como a root."
 }
 
+ensure_mariadb_credentials() {
+  if [[ -n "${MARIADB_APP_USER}" && -n "${MARIADB_APP_PASSWORD}" && -n "${MARIADB_ROOT_PASSWORD}" ]]; then
+    if [[ "${INPUTS_COLLECTED}" -eq 0 ]]; then
+      log "Usando credenciales preconfiguradas para MariaDB (usuario ${MARIADB_APP_USER})."
+    fi
+    return
+  fi
+  prompt_mariadb_credentials
+}
+
 run_mariadb_sql() {
   local client_args=(--batch --silent --raw)
   if mariadb --user root --password="${MARIADB_ROOT_PASSWORD}" --batch -e "SELECT 1" >/dev/null 2>&1; then
@@ -256,7 +426,6 @@ secure_mariadb() {
 
   run_mariadb_sql <<SQL
 ALTER USER 'root'@'localhost' IDENTIFIED BY '${escaped_pass}';
-UPDATE mysql.user SET plugin='mysql_native_password' WHERE User='root' AND Host='localhost';
 DELETE FROM mysql.user WHERE User='';
 DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost','127.0.0.1','::1');
 DROP DATABASE IF EXISTS test;
@@ -303,7 +472,7 @@ test_app_user_connection() {
 }
 
 prompt_phpmyadmin_alias() {
-  local default_alias="${CORE_PHPMYADMIN_ALIAS:-phpmyadmin}"
+  local default_alias="${CORE_PHPMYADMIN_ALIAS:-${STATE_DATA_PHPMYADMIN_ALIAS:-phpmyadmin}}"
   local input=""
 
   while :; do
@@ -341,6 +510,16 @@ prompt_phpmyadmin_alias() {
     log "phpMyAdmin se desplegara en ${PHPMYADMIN_PATH} (URL: /${PHPMYADMIN_ALIAS})."
     break
   done
+}
+
+ensure_phpmyadmin_alias() {
+  if [[ -n "${PHPMYADMIN_ALIAS}" && -n "${PHPMYADMIN_PATH}" ]]; then
+    if [[ "${INPUTS_COLLECTED}" -eq 0 ]]; then
+      log "Usando alias preconfigurado para phpMyAdmin: ${PHPMYADMIN_ALIAS}."
+    fi
+    return
+  fi
+  prompt_phpmyadmin_alias
 }
 
 prepare_web_root() {
@@ -412,11 +591,21 @@ PHP
 
 prompt_nginx_server_name() {
   local input=""
-  if [[ -n "${CORE_SERVER_NAME:-}" ]]; then
-    input="${CORE_SERVER_NAME}"
+  local stored_default="${STATE_DATA_NGINX_SERVER_NAME:-}"
+  local env_default="${CORE_SERVER_NAME:-}"
+  local effective_default="${env_default:-${stored_default}}"
+
+  if [[ -n "${env_default}" ]]; then
+    input="${env_default}"
     log "Usando server_name proporcionado via CORE_SERVER_NAME."
   else
-    read -r -p "Dominio para Nginx (deja vacio para usar la IP): " input
+    local prompt_msg="Dominio para Nginx (deja vacio para usar la IP)"
+    if [[ -n "${effective_default}" && "${effective_default}" != "_" ]]; then
+      read -r -p "${prompt_msg} [${effective_default}]: " input
+      input="${input:-${effective_default}}"
+    else
+      read -r -p "${prompt_msg}: " input
+    fi
   fi
 
   input="${input//[[:space:]]/}"
@@ -436,6 +625,20 @@ prompt_nginx_server_name() {
   NGINX_SERVER_NAME="${input}"
   NGINX_IS_DEFAULT=0
   log "Nginx se configurara para el dominio ${NGINX_SERVER_NAME}."
+}
+
+ensure_nginx_server_name() {
+  if [[ -n "${NGINX_SERVER_NAME}" ]]; then
+    if [[ "${INPUTS_COLLECTED}" -eq 0 ]]; then
+      if [[ "${NGINX_IS_DEFAULT}" -eq 1 ]]; then
+        log "Usando configuracion preestablecida de Nginx como default_server."
+      else
+        log "Usando configuracion preestablecida de Nginx para ${NGINX_SERVER_NAME}."
+      fi
+    fi
+    return
+  fi
+  prompt_nginx_server_name
 }
 
 configure_nginx_server() {
@@ -570,14 +773,14 @@ step_system_prepare() {
 step_nginx_setup() {
   install_nginx
   enable_and_check_nginx
-  prompt_nginx_server_name
+  ensure_nginx_server_name
   configure_nginx_server
 }
 
 step_mariadb_setup() {
   install_mariadb
   enable_and_check_mariadb
-  prompt_mariadb_credentials
+  ensure_mariadb_credentials
   secure_mariadb
   test_mariadb_connection
   create_mariadb_app_user
@@ -593,7 +796,7 @@ step_php_setup() {
 }
 
 step_phpmyadmin_setup() {
-  prompt_phpmyadmin_alias
+  ensure_phpmyadmin_alias
   prepare_web_root
   install_phpmyadmin
   create_default_index
@@ -627,13 +830,28 @@ Puedes verificar acceso ejecutando: sudo mariadb -u root -p
 EOF
 }
 
+collect_initial_inputs() {
+  log "Recopilando datos requeridos antes de iniciar la configuracion..."
+  ensure_mariadb_credentials
+  ensure_phpmyadmin_alias
+  ensure_nginx_server_name
+  log "Datos capturados: MariaDB user=${MARIADB_APP_USER}, phpMyAdmin=/${PHPMYADMIN_ALIAS}, server_name=${NGINX_SERVER_NAME}."
+  STATE_DATA_MARIADB_USER="${MARIADB_APP_USER}"
+  STATE_DATA_PHPMYADMIN_ALIAS="${PHPMYADMIN_ALIAS}"
+  STATE_DATA_NGINX_SERVER_NAME="${NGINX_SERVER_NAME}"
+  save_state
+  INPUTS_COLLECTED=1
+}
+
 main() {
-  run_step "Preparar sistema base" step_system_prepare
-  run_step "Instalar y configurar Nginx" step_nginx_setup
-  run_step "Instalar y configurar MariaDB" step_mariadb_setup
-  run_step "Instalar y configurar PHP 8.2" step_php_setup
-  run_step "Desplegar phpMyAdmin" step_phpmyadmin_setup
-  run_step "Mostrar resumen final" step_summary
+  initialize_state_handling
+  collect_initial_inputs
+  run_step "system_prepare" "Preparar sistema base" step_system_prepare
+  run_step "nginx_setup" "Instalar y configurar Nginx" step_nginx_setup
+  run_step "mariadb_setup" "Instalar y configurar MariaDB" step_mariadb_setup
+  run_step "php_setup" "Instalar y configurar PHP 8.2" step_php_setup
+  run_step "phpmyadmin_setup" "Desplegar phpMyAdmin" step_phpmyadmin_setup
+  run_step "summary" "Mostrar resumen final" step_summary
 }
 
 main "$@"
