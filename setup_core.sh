@@ -78,7 +78,7 @@ run_step() {
     exit 1
   fi
 
-  ((CURRENT_STEP++))
+  ((++CURRENT_STEP))
   log "----- Paso ${CURRENT_STEP}/${TOTAL_STEPS}: ${description} (iniciando)"
 
   set +e
