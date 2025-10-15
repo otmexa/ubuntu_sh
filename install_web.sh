@@ -265,10 +265,17 @@ synchronize_web_files() {
   log "Copiando archivos hacia ${target_dir}..."
   mkdir -p "${target_dir}"
   if command -v rsync >/dev/null 2>&1; then
+    local -a rsync_args=(-a)
     if [[ "${clean_mode}" -eq 1 ]]; then
-      rsync -a --delete "${source_dir}/" "${target_dir}/"
-    else
-      rsync -a "${source_dir}/" "${target_dir}/"
+      rsync_args+=(--delete)
+    fi
+    set +e
+    rsync "${rsync_args[@]}" "${source_dir}/" "${target_dir}/"
+    local rsync_status=$?
+    set -e
+    if [[ "${rsync_status}" -ne 0 ]]; then
+      error "rsync fallo con codigo ${rsync_status}. Intenta revisar permisos en ${source_dir} y ${target_dir} o usa INSTALL_WEB_CLEAN_TARGET=1."
+      exit "${rsync_status}"
     fi
   else
     if [[ "${clean_mode}" -eq 1 ]]; then
