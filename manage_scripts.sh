@@ -23,6 +23,7 @@ declare -a SCRIPTS=(
   "configure_xfce.sh:Personaliza XFCE y carga paneles"
   "setup_core.sh:Actualiza el sistema e instala Nginx"
   "install_web.sh:Despliega MyAAC en Nginx"
+  "update_repo.sh:Actualiza este repositorio (git pull)"
   "reboot:Reinicia el servidor tras aplicar los scripts"
 )
 
@@ -36,41 +37,6 @@ warn() {
 
 error() {
   printf '[ERROR] %s\n' "$*" >&2
-}
-
-update_repo() {
-  if [[ ! -d "${REPO_DIR}/.git" ]]; then
-    warn "No se detecto repositorio Git; omito la actualizacion automatica."
-    return
-  fi
-
-  if ! command -v git >/dev/null 2>&1; then
-    warn "Git no esta instalado; omito la actualizacion automatica."
-    return
-  fi
-
-  if [[ -n "$(git -C "${REPO_DIR}" status --porcelain)" ]]; then
-    warn "Hay cambios locales pendientes; omito 'git pull' para no sobrescribirlos."
-    return
-  fi
-
-  if [[ -z "$(git -C "${REPO_DIR}" remote)" ]]; then
-    warn "El repositorio no tiene remotos configurados; omito 'git pull'."
-    return
-  fi
-
-  log "Actualizando repositorio con 'git pull --ff-only'..."
-  if ! git -C "${REPO_DIR}" fetch --all --prune; then
-    warn "Fallo al ejecutar 'git fetch'. Revisa tu conexion o configuracion remota."
-    return
-  fi
-
-  if ! git -C "${REPO_DIR}" pull --ff-only; then
-    warn "Fallo al ejecutar 'git pull'. Revisa el estado del repositorio."
-    return
-  fi
-
-  log "Repositorio actualizado correctamente."
 }
 
 make_scripts_executable() {
@@ -189,6 +155,10 @@ run_script() {
       export INSTALL_WEB_LOG_FILE="${REPO_DIR}/install_web.log"
       log_hint="${INSTALL_WEB_LOG_FILE}"
       ;;
+    update_repo.sh)
+      export UPDATE_REPO_LOG_FILE="${REPO_DIR}/update_repo.log"
+      log_hint="${UPDATE_REPO_LOG_FILE}"
+      ;;
   esac
 
   local start end
@@ -257,7 +227,6 @@ main() {
     warn "No se pudo asignar propietario ${LOG_OWNER}:${LOG_GROUP} a ${STATUS_LOG}; se mantienen los permisos actuales."
   fi
 
-  update_repo
   make_scripts_executable
 
   while true; do

@@ -158,6 +158,9 @@ clone_repo() {
       else
         if git -C "${checkout_dir}" pull --ff-only; then
           CLONED_REPO_PATH="${checkout_dir}"
+          if [[ -n "${SUDO_USER:-}" && "${SUDO_USER}" != "root" ]]; then
+            chown -R "${SUDO_USER}:${SUDO_USER}" "${checkout_dir}" 2>/dev/null || true
+          fi
           return 0
         fi
         warn "Fallo al aplicar git pull; se reclonara el repositorio."
@@ -184,6 +187,10 @@ clone_repo() {
   fi
 
   CLONED_REPO_PATH="${checkout_dir}"
+
+  if [[ -n "${SUDO_USER:-}" && "${SUDO_USER}" != "root" ]]; then
+    chown -R "${SUDO_USER}:${SUDO_USER}" "${checkout_parent}" 2>/dev/null || true
+  fi
 }
 
 ensure_www_root() {

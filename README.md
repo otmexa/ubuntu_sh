@@ -39,7 +39,10 @@ Coleccion de scripts para provisionar un escritorio Ubuntu con XFCE, XRDP y ajus
    - Agregar automaticamente al usuario que lanzo el script (`benny`, etc.) al grupo `www-data` para que GitHub Desktop o cualquier editor grafico pueda modificar los archivos. Deberas cerrar y reabrir sesion para que surta efecto.
    - Registrar el proceso en `install_web.log`.
 
-5. **Revisar registros**  
+5. **Actualizar el repositorio (opcional)**  
+   Ejecuta `update_repo.sh` (opcion 5) cuando quieras sincronizar esta copia local con el origen (`git pull`). El comando se omitira si detecta cambios locales pendientes o si no hay remoto configurado.
+
+6. **Revisar registros**  
    - `script_runs.log`: historial de scripts ejecutados y su resultado.
    - `setup_desktop.log`: credenciales en texto plano. Eliminalo cuando ya no lo necesites.
    - `setup_core.state`: estado de cada paso del core para reanudar sin repetir etapas. Bórralo (o ejecuta con `SETUP_CORE_RESET_STATE=1`) si quieres forzar que todos los pasos vuelvan a correr.
