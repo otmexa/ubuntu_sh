@@ -38,6 +38,29 @@ REPOS=(
 
 CLONED_REPO_PATH=""
 SELECTED_REPO=""
+SKIP_REPO_PERMS="${INSTALL_WEB_SKIP_REPO_PERMS:-0}"
+SKIP_DEPLOY_PERMS="${INSTALL_WEB_SKIP_DEPLOY_PERMS:-0}"
+SKIP_GROUP_ASSIGN="${INSTALL_WEB_SKIP_GROUP_ASSIGN:-0}"
+SOURCE_BASE=""
+
+ensure_gh_cli() {
+  if command -v gh >/dev/null 2>&1; then
+    return
+  fi
+
+  log "GitHub CLI (gh) no esta instalado; intentando instalarlo automaticamente..."
+  if ! apt-get update >/dev/null 2>&1; then
+    warn "Fallo 'apt-get update'; se intentara instalar gh de todas formas."
+  fi
+
+  if apt-get install -y gh >/dev/null 2>&1; then
+    log "GitHub CLI instalado correctamente."
+    return
+  fi
+
+  error "No se pudo instalar GitHub CLI automaticamente. Instala 'gh' manualmente (sudo apt install gh) e intenta de nuevo."
+  exit 1
+}
 
 log_common() {
   local level="$1"
@@ -85,6 +108,24 @@ ensure_root() {
   fi
 }
 
+determine_sources_base() {
+  if [[ -n "${INSTALL_WEB_SOURCE_DIR:-}" ]]; then
+    SOURCE_BASE="${INSTALL_WEB_SOURCE_DIR}"
+    return
+  fi
+
+  if [[ -n "${SUDO_USER:-}" && "${SUDO_USER}" != "root" ]]; then
+    local user_home
+    user_home="$(eval echo "~${SUDO_USER}" 2>/dev/null || true)"
+    if [[ -n "${user_home}" && "${user_home}" != "~${SUDO_USER}" ]]; then
+      SOURCE_BASE="${user_home}/.cache/ubuntu_sh/web_sources"
+      return
+    fi
+  fi
+
+  SOURCE_BASE="/var/cache/ubuntu_sh/web_sources"
+}
+
 prompt_repo_choice() {
   printf '\nSelecciona la web a instalar:\n'
   local index=1
@@ -121,10 +162,7 @@ prompt_repo_choice() {
 }
 
 check_gh_auth() {
-  if ! command -v gh >/dev/null 2>&1; then
-    error "GitHub CLI (gh) no esta instalado. Instala con 'sudo apt install gh' y vuelve a intentar."
-    exit 1
-  fi
+  ensure_gh_cli
 
   if gh auth status >/dev/null 2>&1; then
     log "GitHub CLI ya se encuentra autenticado."
@@ -146,10 +184,17 @@ clone_repo() {
   local visibility="$2"
   local label="$3"
   local display="$4"
-  local checkout_parent="${SCRIPT_DIR}/web_sources"
+  local checkout_parent="${SOURCE_BASE}"
   local checkout_dir="${checkout_parent}/${label}"
 
   mkdir -p "${checkout_parent}"
+  if [[ -d "${checkout_dir}" ]]; then
+    if [[ ! -d "${checkout_dir}/.git" ]]; then
+      warn "El directorio ${checkout_dir} no contiene un repositorio Git valido; se reclonara."
+      rm -rf "${checkout_dir}"
+    fi
+  fi
+
   if [[ -d "${checkout_dir}" ]]; then
     log "Actualizando repositorio existente en ${checkout_dir}..."
     if git -C "${checkout_dir}" remote get-url origin >/dev/null 2>&1; then
@@ -159,7 +204,7 @@ clone_repo() {
       else
         if git -C "${checkout_dir}" pull --ff-only; then
           CLONED_REPO_PATH="${checkout_dir}"
-          if [[ -n "${SUDO_USER:-}" && "${SUDO_USER}" != "root" ]]; then
+          if [[ "${SKIP_REPO_PERMS}" -ne 1 && -n "${SUDO_USER:-}" && "${SUDO_USER}" != "root" ]]; then
             chown -R "${SUDO_USER}:${SUDO_USER}" "${checkout_dir}" 2>/dev/null || true
           fi
           return 0
@@ -189,8 +234,8 @@ clone_repo() {
 
   CLONED_REPO_PATH="${checkout_dir}"
 
-  if [[ -n "${SUDO_USER:-}" && "${SUDO_USER}" != "root" ]]; then
-    chown -R "${SUDO_USER}:${SUDO_USER}" "${checkout_parent}" 2>/dev/null || true
+  if [[ "${SKIP_REPO_PERMS}" -ne 1 && -n "${SUDO_USER:-}" && "${SUDO_USER}" != "root" ]]; then
+    chown -R "${SUDO_USER}:${SUDO_USER}" "${checkout_dir}" 2>/dev/null || true
   fi
 }
 
@@ -258,6 +303,10 @@ apply_permissions_acl() {
 
 apply_permissions() {
   local target_dir="$1"
+  if [[ "${SKIP_DEPLOY_PERMS}" -eq 1 ]]; then
+    log "Omitiendo ajustes de permisos en ${target_dir} (INSTALL_WEB_SKIP_DEPLOY_PERMS=1)."
+    return
+  fi
   local mode="${INSTALL_WEB_PERMISSIONS_MODE:-${DEFAULT_PERMISSIONS_MODE}}"
 
   if [[ "${mode}" == "acl" ]]; then
@@ -268,6 +317,10 @@ apply_permissions() {
 }
 
 ensure_user_in_www_data() {
+  if [[ "${SKIP_GROUP_ASSIGN}" -eq 1 ]]; then
+    log "Omitiendo incorporacion al grupo www-data (INSTALL_WEB_SKIP_GROUP_ASSIGN=1)."
+    return
+  fi
   if [[ -z "${SUDO_USER:-}" || "${SUDO_USER}" == "root" ]]; then
     return
   fi
@@ -287,6 +340,9 @@ main() {
   ensure_root
   ensure_www_root
   ensure_user_in_www_data
+  determine_sources_base
+  mkdir -p "${SOURCE_BASE}"
+  log "Repositorio fuente alojado en ${SOURCE_BASE}"
 
   SELECTED_REPO=""
   prompt_repo_choice

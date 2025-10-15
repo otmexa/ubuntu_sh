@@ -33,10 +33,10 @@ Coleccion de scripts para provisionar un escritorio Ubuntu con XFCE, XRDP y ajus
 
 4. **Instalar la web (MyAAC)**  
    Ejecuta `install_web.sh` (opcion 4) para:
-   - Elegir entre la version publica (`zimbadev/crystalserver-myacc`) o la privada (`otmexa/myaac_noxusot`). Si seleccionas la privada y no hay credenciales, el script lanzara `gh auth login` para que completes el flujo con tu navegador.
-   - Clonar la web en `~/ubuntu_sh/web_sources/<repo>` y sincronizarla hacia `/var/www/html/` (puedes cambiar el destino exportando `INSTALL_WEB_TARGET_DIR=<subcarpeta>`). Usa `INSTALL_WEB_CLEAN_TARGET=1` si quieres que se eliminen archivos previos del destino.
-   - Ajustar permisos: la carpeta queda bajo `www-data:www-data`, se aplican ACL (si hay `setfacl`) y se abren los directorios que requieren escritura (`outfits`, `system`, `images`, `plugins`, `tools`, `cache`).
-   - Agregar automaticamente al usuario que lanzo el script (`benny`, etc.) al grupo `www-data` para que GitHub Desktop o cualquier editor grafico pueda modificar los archivos. Deberas cerrar y reabrir sesion para que surta efecto.
+   - Elegir entre la version publica (`zimbadev/crystalserver-myacc`) o la privada (`otmexa/myaac_noxusot`). Si seleccionas la privada y no hay credenciales, el script verificara/instalara `gh` automaticamente y lanzara `gh auth login` para que completes el flujo con tu navegador.
+   - Clonar la web en `~/.cache/ubuntu_sh/web_sources/<repo>` (cambia la ruta con `INSTALL_WEB_SOURCE_DIR`) y sincronizarla hacia `/var/www/html/`. Usa `INSTALL_WEB_CLEAN_TARGET=1` si quieres que se eliminen archivos previos del destino.
+   - Ajustar permisos: por defecto deja la carpeta bajo `www-data:www-data`, aplica ACL (si hay `setfacl`) y abre los directorios que requieren escritura (`outfits`, `system`, `images`, `plugins`, `tools`, `cache`). Puedes omitir estos ajustes con `INSTALL_WEB_SKIP_DEPLOY_PERMS=1`.
+   - Agregar automaticamente al usuario que lanzo el script (`benny`, etc.) al grupo `www-data` (omite este paso con `INSTALL_WEB_SKIP_GROUP_ASSIGN=1`). Deberas cerrar y reabrir sesion para que surta efecto.
    - Registrar el proceso en `install_web.log`.
 
 5. **Actualizar el repositorio (opcional)**  
