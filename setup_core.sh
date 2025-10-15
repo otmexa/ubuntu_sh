@@ -594,17 +594,48 @@ prompt_nginx_server_name() {
   local stored_default="${STATE_DATA_NGINX_SERVER_NAME:-}"
   local env_default="${CORE_SERVER_NAME:-}"
   local effective_default="${env_default:-${stored_default}}"
+  local choice=""
+  local default_choice="n"
+
+  if [[ -n "${effective_default}" && "${effective_default}" != "_" ]]; then
+    default_choice="y"
+  fi
 
   if [[ -n "${env_default}" ]]; then
     input="${env_default}"
     log "Usando server_name proporcionado via CORE_SERVER_NAME."
   else
-    local prompt_msg="Dominio para Nginx (deja vacio para usar la IP)"
-    if [[ -n "${effective_default}" && "${effective_default}" != "_" ]]; then
-      read -r -p "${prompt_msg} [${effective_default}]: " input
-      input="${input:-${effective_default}}"
+    if [[ "${default_choice}" == "y" ]]; then
+      read -r -p "¿Configurar dominio personalizado para Nginx? [Y/n]: " choice
     else
-      read -r -p "${prompt_msg}: " input
+      read -r -p "¿Configurar dominio personalizado para Nginx? [y/N]: " choice
+    fi
+    choice="${choice,,}"
+    case "${choice}" in
+      y|yes)
+        choice="y"
+        ;;
+      n|no)
+        choice="n"
+        ;;
+      '')
+        choice="${default_choice}"
+        ;;
+      *)
+        choice="${default_choice}"
+        ;;
+    esac
+
+    if [[ "${choice}" == "y" ]]; then
+      local prompt_msg="Dominio para Nginx (deja vacio para usar la IP)"
+      if [[ -n "${effective_default}" && "${effective_default}" != "_" ]]; then
+        read -r -p "${prompt_msg} [${effective_default}]: " input
+        input="${input:-${effective_default}}"
+      else
+        read -r -p "${prompt_msg}: " input
+      fi
+    else
+      input=""
     fi
   fi
 
@@ -831,6 +862,24 @@ EOF
 }
 
 collect_initial_inputs() {
+  if [[ -z "${MARIADB_APP_USER}" && -n "${STATE_DATA_MARIADB_USER}" ]]; then
+    MARIADB_APP_USER="${STATE_DATA_MARIADB_USER}"
+  fi
+
+  if [[ -z "${PHPMYADMIN_ALIAS}" && -n "${STATE_DATA_PHPMYADMIN_ALIAS}" ]]; then
+    PHPMYADMIN_ALIAS="${STATE_DATA_PHPMYADMIN_ALIAS}"
+    PHPMYADMIN_PATH="/var/www/html/${PHPMYADMIN_ALIAS}"
+  fi
+
+  if [[ -z "${NGINX_SERVER_NAME}" && -n "${STATE_DATA_NGINX_SERVER_NAME}" ]]; then
+    NGINX_SERVER_NAME="${STATE_DATA_NGINX_SERVER_NAME}"
+    if [[ "${NGINX_SERVER_NAME}" == "_" ]]; then
+      NGINX_IS_DEFAULT=1
+    else
+      NGINX_IS_DEFAULT=0
+    fi
+  fi
+
   log "Recopilando datos requeridos antes de iniciar la configuracion..."
   ensure_mariadb_credentials
   ensure_phpmyadmin_alias
