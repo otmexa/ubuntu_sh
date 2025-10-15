@@ -169,13 +169,13 @@ check_gh_auth() {
     return 0
   fi
 
-  log "GitHub CLI no autenticado. Iniciando flujo via device code..."
-  if gh auth login --git-protocol https --scopes "repo"; then
+  log "GitHub CLI no autenticado. Iniciando flujo interactivo..."
+  if gh auth login --hostname github.com --scopes "repo"; then
     log "Autenticacion completada correctamente."
     return 0
   fi
 
-  error "No se pudo completar la autenticacion con GitHub CLI."
+  error "No se pudo completar la autenticacion con GitHub CLI. Ejecuta 'gh auth login --hostname github.com --scopes repo' manualmente y reintenta."
   exit 1
 }
 
