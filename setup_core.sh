@@ -108,9 +108,18 @@ install_helper_tools() {
 purge_existing_php() {
   log "Buscando instalaciones previas de PHP..."
   local packages=()
-  while IFS= read -r pkg; do
-    packages+=("$pkg")
-  done < <(dpkg -l 'php*' 2>/dev/null | awk '/^ii/ { print $2 }')
+  local package_list=""
+
+  # dpkg -l devuelve estado distinto de cero cuando no hay coincidencias; se ignora para evitar detener el script
+  package_list="$(dpkg -l 'php*' 2>/dev/null || true)"
+
+  if [[ -n "${package_list}" ]]; then
+    while IFS= read -r pkg; do
+      if [[ -n "${pkg}" ]]; then
+        packages+=("${pkg}")
+      fi
+    done < <(printf '%s\n' "${package_list}" | awk '/^ii/ { print $2 }')
+  fi
 
   if (( ${#packages[@]} )); then
     log "Eliminando paquetes PHP existentes..."
