@@ -7,6 +7,17 @@ REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 STATUS_LOG="${REPO_DIR}/script_runs.log"
 SETUP_LOG="${REPO_DIR}/setup_desktop.log"
 
+LOG_OWNER="${MANAGER_LOG_OWNER:-${SUDO_USER:-root}}"
+LOG_GROUP="${MANAGER_LOG_GROUP:-}"
+
+if [[ -z "${LOG_GROUP}" ]]; then
+  if id -gn "${LOG_OWNER}" >/dev/null 2>&1; then
+    LOG_GROUP="$(id -gn "${LOG_OWNER}")"
+  else
+    LOG_GROUP="${LOG_OWNER}"
+  fi
+fi
+
 declare -a SCRIPTS=(
   "setup_desktop.sh:Provisiona escritorio base (usuario, paquetes, XRDP)"
   "configure_xfce.sh:Personaliza XFCE y carga paneles"
@@ -214,7 +225,10 @@ main() {
   fi
 
   touch "${STATUS_LOG}"
-  chmod 600 "${STATUS_LOG}"
+  chmod 640 "${STATUS_LOG}"
+  if ! chown "${LOG_OWNER}:${LOG_GROUP}" "${STATUS_LOG}" 2>/dev/null; then
+    warn "No se pudo asignar propietario ${LOG_OWNER}:${LOG_GROUP} a ${STATUS_LOG}; se mantienen los permisos actuales."
+  fi
 
   update_repo
   make_scripts_executable

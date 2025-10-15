@@ -7,12 +7,24 @@ LOG_FILE="${SETUP_CORE_LOG_FILE:-${LOG_FILE_DEFAULT}}"
 TOTAL_STEPS=6
 CURRENT_STEP=0
 
+LOG_OWNER="${SETUP_CORE_LOG_OWNER:-${SUDO_USER:-root}}"
+LOG_GROUP="${SETUP_CORE_LOG_GROUP:-}"
+
+if [[ -z "${LOG_GROUP}" ]]; then
+  if id -gn "${LOG_OWNER}" >/dev/null 2>&1; then
+    LOG_GROUP="$(id -gn "${LOG_OWNER}")"
+  else
+    LOG_GROUP="${LOG_OWNER}"
+  fi
+fi
+
 if [[ -n "${LOG_FILE}" ]]; then
   if ! touch "${LOG_FILE}" 2>/dev/null; then
     printf '[WARN] No se pudo inicializar el archivo de log en %s; continuando sin log persistente.\n' "${LOG_FILE}" >&2
     LOG_FILE=""
   else
-    chmod 600 "${LOG_FILE}"
+    chmod 640 "${LOG_FILE}"
+    chown "${LOG_OWNER}:${LOG_GROUP}" "${LOG_FILE}" 2>/dev/null || printf '[WARN] No se pudo ajustar propietario de %s a %s:%s; continuando con permisos actuales.\n' "${LOG_FILE}" "${LOG_OWNER}" "${LOG_GROUP}" >&2
   fi
 fi
 
