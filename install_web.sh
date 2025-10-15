@@ -32,8 +32,8 @@ DEFAULT_PERMISSIONS_MODE="acl"
 MODIFIABLE_DIRS=(outfits system images plugins tools cache)
 
 REPOS=(
-  "otmexa/myaac_noxusot|privado|noxus"
-  "zimbadev/crystalserver-myacc|publico|crystal"
+  "otmexa/myaac_noxusot|privado|noxus|Noxus MyAAC (privado)"
+  "zimbadev/crystalserver-myacc|publico|crystal|Crystal MyAAC (publico)"
 )
 
 log_common() {
@@ -87,8 +87,8 @@ prompt_repo_choice() {
   local index=1
   local choice=""
   for entry in "${REPOS[@]}"; do
-    IFS='|' read -r name visibility _ <<<"${entry}"
-    printf ' %d) %s (%s)\n' "${index}" "${name}" "${visibility}"
+    IFS='|' read -r name visibility _ display <<<"${entry}"
+    printf ' %d) %s\n' "${index}" "${display:-${name}}"
     ((index++))
   done
   printf ' q) Cancelar\n'
@@ -142,6 +142,7 @@ clone_repo() {
   local repo_name="$1"
   local visibility="$2"
   local label="$3"
+  local display="$4"
   local checkout_parent="${SCRIPT_DIR}/web_sources"
   local checkout_dir="${checkout_parent}/${label}"
 
@@ -165,7 +166,8 @@ clone_repo() {
     fi
   fi
 
-  log "Clonando ${repo_name}..."
+  local friendly="${display:-${repo_name}}"
+  log "Clonando ${friendly} (${repo_name})..."
   if [[ "${visibility}" == "privado" ]]; then
     check_gh_auth
     if ! gh repo clone "${repo_name}" "${checkout_dir}"; then
@@ -278,10 +280,12 @@ main() {
 
   local selection
   selection="$(prompt_repo_choice)"
-  IFS='|' read -r repo_name visibility label <<<"${selection}"
+  IFS='|' read -r repo_name visibility label display_name <<<"${selection}"
+  local friendly="${display_name:-${repo_name}}"
+  log "Opcion seleccionada: ${friendly}"
 
   local checkout_dir
-  checkout_dir="$(clone_repo "${repo_name}" "${visibility}" "${label}")"
+  checkout_dir="$(clone_repo "${repo_name}" "${visibility}" "${label}" "${friendly}")"
 
   local target_subdir="${INSTALL_WEB_TARGET_DIR:-${DEFAULT_TARGET_DIR}}"
   local target_dir="${WWW_ROOT}"
