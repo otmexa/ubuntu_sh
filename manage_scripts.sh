@@ -23,6 +23,7 @@ declare -a SCRIPTS=(
   "configure_xfce.sh:Personaliza XFCE y carga paneles"
   "setup_core.sh:Actualiza el sistema e instala Nginx"
   "install_web.sh:Despliega MyAAC en Nginx"
+  "install_server.sh:Compila Crystal Server (vcpkg)"
   "update_repo.sh:Actualiza este repositorio (git pull)"
   "reboot:Reinicia el servidor tras aplicar los scripts"
 )
@@ -140,6 +141,10 @@ run_script() {
     install_web.sh)
       export INSTALL_WEB_LOG_FILE="${REPO_DIR}/install_web.log"
       log_hint="${INSTALL_WEB_LOG_FILE}"
+      ;;
+    install_server.sh)
+      export INSTALL_SERVER_LOG_FILE="${REPO_DIR}/install_server.log"
+      log_hint="${INSTALL_SERVER_LOG_FILE}"
       ;;
     update_repo.sh)
       export UPDATE_REPO_LOG_FILE="${REPO_DIR}/update_repo.log"
