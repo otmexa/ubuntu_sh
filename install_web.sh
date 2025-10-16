@@ -257,6 +257,35 @@ ensure_www_root() {
   fi
 }
 
+prepare_symlink_conflicts() {
+  local source_dir="$1"
+  local target_dir="$2"
+  local clean_mode="$3"
+  local excludes_var="$4"
+  local -n excludes_ref="${excludes_var}"
+
+  local -a symlink_paths=()
+  mapfile -d '' -t symlink_paths < <(find "${source_dir}" -type l -print0 2>/dev/null || true)
+  local conflict
+  for conflict in "${symlink_paths[@]}"; do
+    local rel_path="${conflict#${source_dir}/}"
+    if [[ -z "${rel_path}" ]]; then
+      continue
+    fi
+
+    local target_path="${target_dir}/${rel_path}"
+    if [[ -e "${target_path}" && ! -L "${target_path}" ]]; then
+      if [[ "${clean_mode}" -eq 1 ]]; then
+        warn "Eliminando '${target_path}' para permitir crear el enlace simbolico desde la fuente."
+        rm -rf -- "${target_path}"
+      else
+        warn "Omitiendo '${rel_path}' porque existe como directorio en el destino y la fuente usa un enlace simbolico. Ejecuta con INSTALL_WEB_CLEAN_TARGET=1 para reemplazarlo."
+        excludes_ref+=("--exclude=${rel_path}")
+      fi
+    fi
+  done
+}
+
 synchronize_web_files() {
   local source_dir="$1"
   local target_dir="$2"
@@ -266,8 +295,13 @@ synchronize_web_files() {
   mkdir -p "${target_dir}"
   if command -v rsync >/dev/null 2>&1; then
     local -a rsync_args=(-a)
+    local -a rsync_excludes=()
     if [[ "${clean_mode}" -eq 1 ]]; then
       rsync_args+=(--delete)
+    fi
+    prepare_symlink_conflicts "${source_dir}" "${target_dir}" "${clean_mode}" rsync_excludes
+    if (( ${#rsync_excludes[@]} )); then
+      rsync_args+=("${rsync_excludes[@]}")
     fi
     set +e
     rsync "${rsync_args[@]}" "${source_dir}/" "${target_dir}/"
