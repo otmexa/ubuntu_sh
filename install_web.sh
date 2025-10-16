@@ -30,6 +30,7 @@ WWW_ROOT="/var/www/html"
 DEFAULT_TARGET_DIR=""
 DEFAULT_PERMISSIONS_MODE="acl"
 MODIFIABLE_DIRS=(outfits system images plugins tools cache)
+ENSURE_DIRS=(system/cache)
 
 REPOS=(
   "otmexa/myaac_noxusot|privado|noxus|Noxus MyAAC (privado)"
@@ -257,6 +258,17 @@ ensure_www_root() {
   fi
 }
 
+ensure_required_dirs() {
+  local target_dir="$1"
+  local dir
+  for dir in "${ENSURE_DIRS[@]}"; do
+    if [[ -z "${dir}" ]]; then
+      continue
+    fi
+    mkdir -p "${target_dir}/${dir}"
+  done
+}
+
 prepare_symlink_conflicts() {
   local source_dir="$1"
   local target_dir="$2"
@@ -326,9 +338,9 @@ apply_permissions_basic() {
   chmod -R 755 "${target_dir}"
   local dir
   for dir in "${MODIFIABLE_DIRS[@]}"; do
-    if [[ -d "${target_dir}/${dir}" ]]; then
-      chmod -R 777 "${target_dir}/${dir}"
-    fi
+    local dir_path="${target_dir}/${dir}"
+    mkdir -p "${dir_path}"
+    chmod -R 777 "${dir_path}"
   done
 }
 
@@ -348,9 +360,9 @@ apply_permissions_acl() {
 
   local dir
   for dir in "${MODIFIABLE_DIRS[@]}"; do
-    if [[ -d "${target_dir}/${dir}" ]]; then
-      chmod -R 777 "${target_dir}/${dir}"
-    fi
+    local dir_path="${target_dir}/${dir}"
+    mkdir -p "${dir_path}"
+    chmod -R 777 "${dir_path}"
   done
 }
 
@@ -422,6 +434,7 @@ main() {
     target_dir="${WWW_ROOT}/${target_subdir}"
   fi
   synchronize_web_files "${checkout_dir}" "${target_dir}"
+  ensure_required_dirs "${target_dir}"
   apply_permissions "${target_dir}"
 
   log "Instalacion completada."
