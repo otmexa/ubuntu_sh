@@ -24,6 +24,7 @@ declare -a SCRIPTS=(
   "setup_core.sh:Actualiza el sistema e instala Nginx"
   "install_web.sh:Despliega MyAAC en Nginx"
   "install_server.sh:Compila Crystal Server (vcpkg)"
+  "reapply_crystal_perms.sh:Reaplica permisos de Crystal Server"
   "update_repo.sh:Actualiza este repositorio (git pull)"
   "reboot:Reinicia el servidor tras aplicar los scripts"
 )
@@ -145,6 +146,10 @@ run_script() {
     install_server.sh)
       export INSTALL_SERVER_LOG_FILE="${REPO_DIR}/install_server.log"
       log_hint="${INSTALL_SERVER_LOG_FILE}"
+      ;;
+    reapply_crystal_perms.sh)
+      export REAPPLY_CRYSTAL_PERMS_LOG_FILE="${REPO_DIR}/reapply_crystal_perms.log"
+      log_hint="${REAPPLY_CRYSTAL_PERMS_LOG_FILE}"
       ;;
     update_repo.sh)
       export UPDATE_REPO_LOG_FILE="${REPO_DIR}/update_repo.log"
