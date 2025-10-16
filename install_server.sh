@@ -408,6 +408,13 @@ setup_vcpkg() {
     error "VCPKG_DIR no esta definido."
     exit 1
   fi
+
+  local force_vcpkg="${INSTALL_SERVER_FORCE_VCPKG:-0}"
+  if [[ "${force_vcpkg}" -ne 1 && -x "${VCPKG_DIR}/vcpkg" && -d "${VCPKG_DIR}/.git" ]]; then
+    log "vcpkg ya se encuentra instalado en ${VCPKG_DIR}; se omite la reinstalacion. Usa INSTALL_SERVER_FORCE_VCPKG=1 para forzar."
+    return 0
+  fi
+
   if [[ -d "${VCPKG_DIR}/.git" ]]; then
     log "Actualizando repositorio existente de vcpkg..."
     if ! run_as_target "cd '${VCPKG_DIR}' && git pull --ff-only"; then
