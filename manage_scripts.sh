@@ -23,6 +23,7 @@ declare -a SCRIPTS=(
   "configure_xfce.sh:Personaliza XFCE y carga paneles"
   "setup_core.sh:Actualiza el sistema e instala Nginx"
   "install_web.sh:Despliega MyAAC en Nginx"
+  "reinstall_phpmyadmin.sh:Reinstala solo phpMyAdmin en /var/www/html"
   "install_server.sh:Compila Crystal Server (vcpkg)"
   "reapply_crystal_perms.sh:Reaplica permisos de Crystal Server"
   "update_repo.sh:Actualiza este repositorio (git pull)"
@@ -142,6 +143,10 @@ run_script() {
     install_web.sh)
       export INSTALL_WEB_LOG_FILE="${REPO_DIR}/install_web.log"
       log_hint="${INSTALL_WEB_LOG_FILE}"
+      ;;
+    reinstall_phpmyadmin.sh)
+      export REINSTALL_PHPMYADMIN_LOG_FILE="${REPO_DIR}/reinstall_phpmyadmin.log"
+      log_hint="${REINSTALL_PHPMYADMIN_LOG_FILE}"
       ;;
     install_server.sh)
       export INSTALL_SERVER_LOG_FILE="${REPO_DIR}/install_server.log"
