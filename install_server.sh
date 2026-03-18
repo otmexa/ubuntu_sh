@@ -430,7 +430,7 @@ setup_vcpkg() {
     run_as_target "git clone '${VCPKG_REPO_URL}' '${VCPKG_DIR}'"
   fi
   run_as_target "cd '${VCPKG_DIR}' && ./bootstrap-vcpkg.sh"
-  run_as_target "cd '${VCPKG_DIR}' && ./vcpkg install --triplet x64-linux-release"
+  log "vcpkg inicializado en ${VCPKG_DIR}. Las dependencias se instalaran desde el manifest de Crystal Server durante la configuracion de CMake."
 }
 
 prepare_crystal_repo() {
