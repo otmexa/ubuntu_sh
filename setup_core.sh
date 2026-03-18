@@ -828,11 +828,10 @@ remove_apache() {
 
 ufw_rule_exists() {
   local rule="$1"
-  set +e
-  LANG=C ufw status | awk -v rule="${rule}" '$1 == rule && $2 == "ALLOW" { found=1 } END { exit(found ? 0 : 1) }'
-  local status=$?
-  set -e
-  return "${status}"
+  if LANG=C ufw status | awk -v rule="${rule}" '$1 == rule && $2 == "ALLOW" { found=1 } END { exit(found ? 0 : 1) }'; then
+    return 0
+  fi
+  return 1
 }
 
 ensure_ufw_rule() {
@@ -851,11 +850,7 @@ install_ufw() {
 }
 
 enable_ufw() {
-  set +e
-  LANG=C ufw status | grep -qi '^status: active'
-  local active=$?
-  set -e
-  if [[ "${active}" -eq 0 ]]; then
+  if LANG=C ufw status | grep -qi '^status: active'; then
     log "UFW ya se encuentra activo."
     return
   fi
