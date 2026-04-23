@@ -1,6 +1,6 @@
 # ubuntu_sh
 
-Coleccion de scripts para provisionar un escritorio Ubuntu con XFCE, XRDP y ajustes personalizados.
+Coleccion de scripts para provisionar un escritorio Debian/Ubuntu con XFCE, XRDP y ajustes personalizados.
 
 ## Orden de ejecucion recomendado
 
@@ -16,7 +16,7 @@ Coleccion de scripts para provisionar un escritorio Ubuntu con XFCE, XRDP y ajus
    El menu mostrara los scripts disponibles; selecciona primero `setup_desktop.sh`. Si termina bien se marcara con `*` cuando vuelvas a abrir el administrador.
 
 2. **Configurar XFCE**  
-   Con el administrador abierto selecciona `configure_xfce.sh` (opcion 2) para aplicar la personalizacion del entorno, cargar los paneles predefinidos y dejar listo el escritorio para el usuario objetivo.
+   Con el administrador abierto selecciona `configure_xfce.sh` (opcion 2) para aplicar la personalizacion del entorno, cargar el panel `wincodex.tar.bz2` y dejar listo el escritorio para el usuario objetivo.
 
 3. **Configurar el core del stack**  
    Ejecuta `setup_core.sh` (opcion 3) para:

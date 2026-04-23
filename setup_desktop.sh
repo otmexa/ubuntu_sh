@@ -135,11 +135,11 @@ record_credentials() {
   fi
 
   {
-    printf '--- Credential Snapshot ---\n'
+    printf '%s\n' '--- Credential Snapshot ---'
     printf 'Timestamp: %s\n' "$(date +'%Y-%m-%dT%H:%M:%S%z')"
     printf 'Username: %s\n' "${USERNAME}"
     printf 'Password: %s\n' "${PASSWORD}"
-    printf '--- End Credential Snapshot ---\n\n'
+    printf '%s\n\n' '--- End Credential Snapshot ---'
   } >> "${LOG_FILE}"
 }
 
@@ -162,22 +162,50 @@ sync_root_password() {
 }
 
 install_packages() {
+  local -a desktop_packages
+
   log "Updating APT indexes..."
   apt-get update
 
   log "Selecting lightdm as default display manager."
   echo "lightdm shared/default-x-display-manager select lightdm" | debconf-set-selections
 
+  if apt-cache show xubuntu-desktop >/dev/null 2>&1; then
+    desktop_packages=(xubuntu-desktop)
+  else
+    desktop_packages=(xfce4 xfce4-goodies dbus-x11)
+  fi
+
   log "Installing core packages (XFCE, lightdm, xrdp, Certbot)..."
-  apt-get install -y xubuntu-desktop lightdm xrdp certbot python3-certbot-nginx wget xfce4-panel-profiles
+  apt-get install -y "${desktop_packages[@]}" lightdm xrdp certbot python3-certbot-nginx python3-gi wget bzip2 lbzip2 xfce4-panel-profiles
 
   log "Setting XFCE as the x-session-manager."
-  update-alternatives --set x-session-manager /usr/bin/startxfce4
+  if [[ -x /usr/bin/startxfce4 ]]; then
+    update-alternatives --set x-session-manager /usr/bin/startxfce4
+  else
+    warn "startxfce4 was not found; XRDP may not start an XFCE session."
+  fi
+
+  configure_user_xsession
 
   log "Enabling and starting XRDP."
   systemctl enable --now xrdp
   adduser xrdp ssl-cert
   systemctl restart xrdp
+}
+
+configure_user_xsession() {
+  local target_home
+  target_home="$(getent passwd "${USERNAME}" | cut -d: -f6)"
+  if [[ -z "${target_home}" || ! -d "${target_home}" ]]; then
+    warn "Could not resolve home directory for ${USERNAME}; skipping .xsession setup."
+    return
+  fi
+
+  log "Configuring XRDP session startup for ${USERNAME}."
+  printf 'startxfce4\n' > "${target_home}/.xsession"
+  chown "${USERNAME}:${USERNAME}" "${target_home}/.xsession" 2>/dev/null || chown "${USERNAME}" "${target_home}/.xsession"
+  chmod 600 "${target_home}/.xsession"
 }
 
 install_deb_packages() {

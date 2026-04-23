@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-XFCE_PANEL_ARCHIVE="${XFCE_PANEL_ARCHIVE:-${SCRIPT_DIR}/winConfigTemp.bz2}"
+XFCE_PANEL_ARCHIVE="${XFCE_PANEL_ARCHIVE:-${SCRIPT_DIR}/wincodex.tar.bz2}"
 XFCE_PANEL_CONFIG_FILE="${XFCE_PANEL_CONFIG_FILE:-config.txt}"
 
 if [[ "$(id -u)" -ne 0 ]]; then
@@ -15,7 +15,7 @@ XFCE_THEME="${XFCE_THEME:-Adwaita-dark}"
 KEYBOARD_LAYOUT="${KEYBOARD_LAYOUT:-latam}"
 KEYBOARD_MODEL="${KEYBOARD_MODEL:-pc105}"
 KEYBOARD_VARIANT="${KEYBOARD_VARIANT:-}"
-XFCE_PANEL_PROFILE_NAME="${XFCE_PANEL_PROFILE_NAME:-win}"
+XFCE_PANEL_PROFILE_NAME="${XFCE_PANEL_PROFILE_NAME:-wincodex}"
 TARGET_HOME=""
 TARGET_GROUP=""
 
@@ -131,18 +131,25 @@ configure_keyboard() {
 
 disable_release_upgrades() {
   local cfg="/etc/update-manager/release-upgrades"
+  local cfg_dir
+  cfg_dir="$(dirname "${cfg}")"
   log "Disabling release upgrade prompts system-wide."
-  if [[ -f "${cfg}" ]]; then
-    if grep -q '^Prompt=' "${cfg}"; then
-      sed -i 's/^Prompt=.*/Prompt=never/' "${cfg}"
+
+  if [[ -d "${cfg_dir}" ]]; then
+    if [[ -f "${cfg}" ]]; then
+      if grep -q '^Prompt=' "${cfg}"; then
+        sed -i 's/^Prompt=.*/Prompt=never/' "${cfg}"
+      else
+        printf '\nPrompt=never\n' >> "${cfg}"
+      fi
     else
-      printf '\nPrompt=never\n' >> "${cfg}"
-    fi
-  else
-    cat <<'EOF' > "${cfg}"
+      cat <<'EOF' > "${cfg}"
 [DEFAULT]
 Prompt=never
 EOF
+    fi
+  else
+    log "Release upgrade manager config directory not present; skipping system-wide prompt config."
   fi
 
   if command -v gsettings >/dev/null 2>&1; then
@@ -208,14 +215,14 @@ apply_panel_configuration() {
   if ! tar -xf "${archive}" -C "${temp_dir}"; then
     log "Failed to extract panel archive; skipping panel import."
     rm -rf "${temp_dir}"
-    return
+    return 1
   fi
 
   local config_path="${temp_dir}/${XFCE_PANEL_CONFIG_FILE}"
   if [[ ! -f "${config_path}" ]]; then
     log "Panel config file ${XFCE_PANEL_CONFIG_FILE} missing inside archive; skipping panel import."
     rm -rf "${temp_dir}"
-    return
+    return 1
   fi
 
   local panel_dir="${TARGET_HOME}/.config/xfce4/panel"
@@ -245,6 +252,8 @@ apply_panel_configuration() {
     log "Panel configuration imported for ${TARGET_USER}."
   else
     log "Failed to import panel configuration for ${TARGET_USER}."
+    rm -rf "${temp_dir}"
+    return 1
   fi
 
   rm -rf "${temp_dir}"
