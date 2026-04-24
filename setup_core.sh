@@ -300,12 +300,45 @@ PHPMYADMIN_ALIAS=""
 PHPMYADMIN_PATH=""
 NGINX_SERVER_NAME="_"
 NGINX_IS_DEFAULT=1
+OS_ID=""
+OS_CODENAME=""
+
+detect_os() {
+  if [[ ! -r /etc/os-release ]]; then
+    error "No se pudo leer /etc/os-release para detectar la distribucion."
+    exit 1
+  fi
+
+  OS_ID="$(. /etc/os-release && printf '%s' "${ID:-}")"
+  OS_CODENAME="$(. /etc/os-release && printf '%s' "${VERSION_CODENAME:-}")"
+
+  if [[ -z "${OS_ID}" ]]; then
+    error "No se pudo detectar la distribucion del sistema."
+    exit 1
+  fi
+
+  log "Sistema detectado: ${OS_ID}${OS_CODENAME:+ (${OS_CODENAME})}."
+}
+
+disable_invalid_ondrej_repo_on_debian() {
+  local invalid_repo="/etc/apt/sources.list.d/ondrej-ubuntu-php-bookworm.list"
+
+  if [[ "${OS_ID}" != "debian" ]]; then
+    return
+  fi
+
+  if [[ -f "${invalid_repo}" ]]; then
+    warn "Se detecto un repo invalido de Ondrej para Ubuntu en Debian. Se desactivara: ${invalid_repo}"
+    mv "${invalid_repo}" "${invalid_repo}.disabled"
+  fi
+}
 
 escape_sql_string() {
   printf '%s' "$1" | sed "s/'/''/g"
 }
 
 update_system() {
+  disable_invalid_ondrej_repo_on_debian
   log "Actualizando indices de APT..."
   apt-get update
 
@@ -771,16 +804,34 @@ EOF
 }
 
 install_php_dependencies() {
-  log "Instalando dependencias previas para el PPA de PHP..."
-  apt-get install -y python3-launchpadlib
-  apt-get install -y software-properties-common apt-transport-https
+  if [[ "${OS_ID}" == "ubuntu" ]]; then
+    log "Instalando dependencias previas para el PPA de PHP..."
+    apt-get install -y python3-launchpadlib
+    apt-get install -y software-properties-common apt-transport-https
+    return
+  fi
+
+  log "Instalando dependencias base para PHP desde los repositorios oficiales..."
+  apt-get install -y apt-transport-https ca-certificates
 }
 
 add_php_repository() {
-  log "Agregando PPA de Ondrej para PHP..."
-  add-apt-repository -y ppa:ondrej/php
-  log "Actualizando indices de APT tras agregar el PPA..."
-  apt-get update
+  if [[ "${OS_ID}" == "ubuntu" ]]; then
+    log "Agregando PPA de Ondrej para PHP en Ubuntu..."
+    add-apt-repository -y ppa:ondrej/php
+    log "Actualizando indices de APT tras agregar el PPA..."
+    apt-get update
+    return
+  fi
+
+  if [[ "${OS_ID}" == "debian" ]]; then
+    disable_invalid_ondrej_repo_on_debian
+    log "Debian detectado: se usaran los paquetes oficiales de la distro para PHP 8.2."
+    return
+  fi
+
+  error "Distribucion no soportada para la instalacion automatica de PHP: ${OS_ID}"
+  exit 1
 }
 
 install_php_stack() {
@@ -976,6 +1027,7 @@ collect_initial_inputs() {
 }
 
 main() {
+  detect_os
   build_firewall_rules
   initialize_state_handling
   collect_initial_inputs
